@@ -396,19 +396,19 @@ function aiPlan(role,phase){ var b=role==='strong'?strong:light;
     if(role==='light'){ var need=(G.loaded+G.crates.length)<G.cratesTarget; if(need && G.crates.length<3) return toward(b,DEPOT.shelf.x,DEPOT.shelf.y+18, nearShelf(b)); return idleNear(b,DEPOT.shelf.x+34,DEPOT.shelf.y+34); }
     if(b.holding) return toward(b,DEPOT.truck.x-14,DEPOT.truck.y, nearTruckBed(b)); var c=matCrate(); if(c) return toward(b,c.x,c.y, dist(b.x,b.y,c.x,c.y)<58); return idleNear(b,DEPOT.mat.x+40,DEPOT.mat.y);
   }
-  // ride
+  // ride — DRIVER (strong) drives + greets; PICKER (light) hands out the Bible
   if(role==='strong'){ if(G.pray && !G.prayDone){ var near=Math.abs(truck.x-G.prayX)<40; return driveToward(G.prayX,LANE, near); }
-    var p=nearestUndelivered('worded'); if(p) return driveToward(p.x,p.y, dist(truck.x,truck.y,p.x,p.y)<60 && G.cargo>0); return ZERO; }
-  var ph=nearestUndelivered('hugged'); if(ph) return {dx:0,dy:0,act:dist(truck.x,truck.y,ph.x,ph.y)<66,actEdge:false}; return ZERO;
+    var p=nearestUndelivered(null); if(p) return driveToward(p.x,p.y, dist(truck.x,truck.y,p.x,p.y)<60 && !p.hugged); return ZERO; }
+  var ph=nearestUndelivered(null); if(ph) return {dx:0,dy:0,act:(dist(truck.x,truck.y,ph.x,ph.y)<66 && G.cargo>0 && !ph.worded),actEdge:false}; return ZERO;
 }
 function driveToward(tx,ty,atAct){ var dx=tx-truck.x,dy=ty-truck.y,d=Math.hypot(dx,dy)||1; var e=d<70?Math.max(0.35,d/120):1; return {dx:dx/d*e,dy:dy/d*e,act:!!atAct,actEdge:false}; }
 function roleInput(role){ var dx=0,dy=0,act=false,actEdge=false,any=false;
   for(var i=0;i<players.length;i++){ var p=players[i]; if(p.inactive||p.role!==role||!p._read) continue; any=true; var r=p._read; dx+=r.dx; dy+=r.dy; if(r.act)act=true; if(r.actEdge)actEdge=true; }
   var m=Math.hypot(dx,dy); if(m>1){dx/=m;dy/=m;} return {any:any, env:{dx:dx,dy:dy,act:act,actEdge:actEdge}};
 }
-function roleEnv(role,phase){ var ri=roleInput(role);          // ALL humans in a role co-drive; extras assist, none shadowed
-  if(ri.any){ if(Math.hypot(ri.env.dx,ri.env.dy)>0.08||ri.env.act) return {env:ri.env,byAI:false}; if(G.idle<1.4) return {env:ZERO,byAI:false}; }
-  return {env:aiPlan(role,phase),byAI:true};
+function roleEnv(role,phase){ var ri=roleInput(role);          // a CHILD on this seat does it themselves — NOTHING is automated for them.
+  if(ri.any) return {env:ri.env,byAI:false};                   // seat has a human → always their input (idle = the truck simply waits)
+  return {env:aiPlan(role,phase),byAI:true};                   // ONLY a totally empty seat is filled, so one child can still play solo
 }
 function anyAct(){ for(var i=0;i<players.length;i++){ var p=players[i]; if(!p.inactive && p._read && p._read.act) return true; } return false; }
 function anyActEdge(){ for(var i=0;i<players.length;i++){ var p=players[i]; if(!p.inactive && p._read && p._read.actEdge) return true; } return false; }
@@ -450,8 +450,8 @@ function stepRide(dt){ strong.aiCd=Math.max(0,(strong.aiCd||0)-dt); light.aiCd=M
   if(pers){ var L=roleEnv('light','ride');
     var sAct=S.byAI?(S.env.act&&strong.aiCd<=0):S.env.actEdge;
     var lAct=L.byAI?(L.env.act&&light.aiCd<=0):L.env.actEdge;
-    if(sAct && G.cargo>0 && !pers.worded){ handBible(pers); strong.aiCd=0.5; strong.state='deliver'; strong.animT=0.5; }
-    if(lAct && !pers.hugged){ hugPerson(pers); light.aiCd=0.5; light.state='hug'; light.animT=0.5; }
+    if(sAct && !pers.hugged){ hugPerson(pers); strong.aiCd=0.5; strong.state='deliver'; strong.animT=0.5; }        // DRIVER greets
+    if(lAct && G.cargo>0 && !pers.worded){ handBible(pers); light.aiCd=0.5; light.state='deliver'; light.animT=0.5; } // PICKER hands the Bible
   }
   if(G.snares) updateSnares(dt);
   strong.x=truck.x-9; strong.y=truck.y-3; light.x=truck.x+11; light.y=truck.y-7;
@@ -581,18 +581,20 @@ function drawHUD(){ var x=16,y=16,w=250,h=14; ctx.fillStyle='rgba(8,14,26,0.55)'
   ctx.fillStyle='#ffe9b0'; ctx.font='800 10px Inter'; ctx.fillText('KINGDOM OF GOD',x,y+h+12); ctx.fillStyle='#7c8098'; ctx.textAlign='right'; ctx.fillText('the darkness',x+w,y+h+12); ctx.textAlign='left';
   var A=actOf(sceneIdx), lt=A.end-A.start+1, ln=sceneIdx-A.start+1; ctx.fillStyle='#eaf0ff'; ctx.font='800 13px Inter'; ctx.textAlign='right'; var rt=G.phase==='load'?('Loading ✝ '+Math.min(G.cargo,G.total)+' / '+G.total):('✝ '+G.souls+' / '+G.total); ctx.fillText(rt+'   ·   Act '+A.roman+'  '+ln+'/'+lt,W-16,24); ctx.textAlign='left';
   ctx.fillStyle='rgba(220,230,255,0.9)'; ctx.font='700 13px Inter'; ctx.textAlign='center'; ctx.fillText(G.title,W*0.5,20); ctx.textAlign='left'; }
-function drawContextPrompt(){ if(G.praying||G.done)return; var txt=null,ax=W*0.5,ay=H*0.5;
-  if(G.phase==='load'){ if(G.golden){ txt='Carry the golden case together!'; ax=SX(G.golden.x); ay=G.golden.y-46; }
-    else { var sP=playerForRole('strong'); if(strong.holding){txt='Take it to the truck';} else if(matCrate()){txt='Pick up the crate';} else {txt='Wait for a crate…';} ax=SX(strong.x); ay=strong.y-56; } }
-  else { var pers=nearPerson(); if(pers){ txt=(G.cargo<=0&&!pers.worded)?'(truck empty)':'Hug & give a Bible'; ax=SX(pers.x); ay=pers.y-78; }
-    else if(G.pray&&!G.prayDone&&Math.abs(truck.x-G.prayX)<48){ txt='Stop and pray'; ax=SX(G.prayX); ay=LANE-80; } }
-  if(txt){ ctx.save(); ctx.globalAlpha=0.75+0.25*Math.sin(t*5); ctx.fillStyle='#fff'; ctx.font='800 14px Inter'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=8; ctx.fillText((padSeen?'Ⓐ ':(isTouch?'✦ ':'[Space] '))+txt,ax,ay); ctx.restore(); ctx.textAlign='left'; } }
+function prompt3(txt,ax,ay){ ctx.save(); ctx.globalAlpha=0.75+0.25*Math.sin(t*5); ctx.fillStyle='#fff'; ctx.font='800 13px Inter'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=8; ctx.fillText((padSeen?'Ⓐ ':(isTouch?'✦ ':'[Space] '))+txt,ax,ay); ctx.restore(); ctx.textAlign='left'; }
+function drawContextPrompt(){ if(G.praying||G.done)return;
+  if(G.phase==='load'){ if(G.golden){ prompt3('Carry the golden case TOGETHER!',SX(G.golden.x),G.golden.y-48); return; }
+    if(strong.holding) prompt3('Take it to the truck',SX(strong.x),strong.y-60); else if(matCrate()) prompt3('Pick up the crate',SX(strong.x),strong.y-60);
+    if((G.loaded+G.crates.length)<G.cratesTarget){ if(nearShelf(light)) prompt3('Reach up for a Bible',SX(light.x),light.y-60); else prompt3('PICKER: reach the shelf ↑',SX(DEPOT.shelf.x),DEPOT.shelf.y-98); } }
+  else { var pers=nearPerson(); if(pers){ prompt3(G.cargo<=0?'(load more Bibles first)':'Give the Bible TOGETHER!',SX(pers.x),pers.y-80); }
+    else if(G.pray&&!G.prayDone&&Math.abs(truck.x-G.prayX)<48){ prompt3('Stop and pray',SX(G.prayX),LANE-82); } }
+}
 function drawBigMsg(){ ctx.save(); var k=clamp(G.msgT/1.6,0,1); ctx.globalAlpha=Math.min(1,k*2.2); ctx.fillStyle='#f6d98a'; ctx.font='800 '+Math.round(42+(1-k)*8)+'px Cinzel,serif'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=14; ctx.fillText(G.msg,W/2,H*0.38); ctx.restore(); ctx.textAlign='left'; }
 function drawPrayerOverlay(){ ctx.fillStyle='rgba(6,10,22,0.5)'; ctx.fillRect(0,0,W,H); var cx=W/2,cy=H*0.5, br=40+Math.sin(t*1.1)*16+G.prayT*30; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(190,215,255,0.8)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,br,0,TAU); ctx.stroke(); ctx.fillStyle=rgrad(cx,cy,2,br,[[0,'rgba(190,215,255,0.22)'],[1,'rgba(190,215,255,0)']]); ctx.beginPath(); ctx.arc(cx,cy,br,0,TAU); ctx.fill(); ctx.restore(); ctx.fillStyle='#8fb0e8'; ctx.font='700 12px Inter'; ctx.textAlign='center'; ctx.fillText((padSeen?'hold Ⓐ':(isTouch?'hold ✦':'hold Space'))+' to pray  ·  '+Math.round(G.prayT*100)+'%',cx,cy+br+28); ctx.textAlign='left'; }
 function drawRoster(){ var ps=activePlayers(); if(!TV && ps.length<2) return; var roles=['strong','light'], yy=H-34, cw=150, gap=10, tot=2*cw+gap, bsx=(W-tot)/2;
   for(var i=0;i<2;i++){ var role=roles[i], p=playerForRole(role), bx=bsx+i*(cw+gap); ctx.save(); ctx.fillStyle='rgba(8,12,22,0.8)'; fillrr(bx,yy,cw,28,8); ctx.fillStyle=ROLECOL[role]; ctx.beginPath(); ctx.arc(bx+15,yy+14,7.5,0,TAU); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillStyle='#eef3ff'; ctx.font='800 12px Inter'; ctx.fillText(role==='strong'?'STRONG':'LIGHT',bx+28,yy+10); ctx.fillStyle='#9fb2d8'; ctx.font='700 10px Inter'; ctx.fillText(p?(p.pad!=null?('Player '+(p.idx+1)):(p.kb?'Keys':'Touch')):'helper (auto)',bx+28,yy+21); ctx.restore(); }
-  ctx.textAlign='left'; ctx.textBaseline='alphabetic'; if(TV && ps.length<2){ ctx.save(); ctx.globalAlpha=0.5+0.25*Math.sin(t*3); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px Inter'; ctx.textAlign='center'; ctx.fillText('press Ⓐ on a 2nd controller to join as LIGHT',W/2,yy-8); ctx.restore(); ctx.textAlign='left'; } }
+    ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillStyle='#eef3ff'; ctx.font='800 12px Inter'; ctx.fillText(role==='strong'?'DRIVER':'PICKER',bx+28,yy+10); ctx.fillStyle='#9fb2d8'; ctx.font='700 10px Inter'; ctx.fillText(p?(p.pad!=null?('Player '+(p.idx+1)):(p.kb?'Keys':'Touch')):'(empty — helper)',bx+28,yy+21); ctx.restore(); }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic'; if(TV && ps.length<2){ ctx.save(); ctx.globalAlpha=0.5+0.25*Math.sin(t*3); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px Inter'; ctx.textAlign='center'; ctx.fillText('press Ⓐ on a 2nd controller to join as PICKER',W/2,yy-8); ctx.restore(); ctx.textAlign='left'; } }
 function render(dt){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.fillStyle='#05080f'; ctx.fillRect(0,0,cv.width,cv.height); applyCam();
   drawSky(); drawParallax(); drawGround();
   if(shake>0){ ctx.save(); ctx.translate(rand(-shake,shake),rand(-shake,shake)); shake=Math.max(0,shake-dt*30); }
@@ -609,8 +611,8 @@ function render(dt){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,c
 var scrEl=document.getElementById('screen'), scrTitle=document.getElementById('scrTitle'), scrText=document.getElementById('scrText'), scrBtn=document.getElementById('scrBtn'), scrHint=document.getElementById('scrHint');
 var mode='title';
 function showTitle(){ mode='title'; PROG.souls=0; scrTitle.innerHTML='Racing for Jesus<small>The Gospel Truck · Acts I–II</small>';
-  scrText.innerHTML="Two helpers, one big truck. <b>Fill the Gospel Truck together</b> — one reaches the high shelf, one carries each crate to the bed — then <b>ride out</b> and give every house a <b>hug &amp; the Word</b>. Watch the grey land <b>bloom to gold</b>.<br><br><b>Two players together</b> (two controllers), or play solo — a helper fills the other role so a little one is never stuck.";
-  scrBtn.textContent='▶ Go ye'; scrHint.textContent='controller, keyboard or touch · press Ⓐ / Space to begin'; scrEl.classList.add('on'); }
+  scrText.innerHTML="<b>Best with two players.</b> One child <b>DRIVES</b> the truck, the other <b>PICKS the Bibles</b>. Load the Gospel Truck together, drive to each house, and <b>hand out the Bible together</b> — you do it all yourselves, nothing is automatic. Watch the grey land <b>bloom to gold</b>.<br><br><i>Two controllers = DRIVER + PICKER. Playing solo? A helper fills the empty seat so one child can still play.</i>";
+  scrBtn.textContent='▶ Go ye'; scrHint.textContent='2 controllers (one drives, one picks) · or keyboard / touch to play solo'; scrEl.classList.add('on'); }
 function startScene(i){ if(humanCount()===0) ensureLocalPlayer(); scrEl.classList.remove('on'); buildScene(i); t2=0; caption('word',G.cfg.open.text,G.cfg.open.ref); var id=++capToken; setTimeout(function(){ if(!G.done&&capToken===id) caption('narr',G.intro); },4200); setTimeout(function(){ if(!G.done) G.started=true; },700); }
 function winScene(){ if(G.done)return; G.done=true; sfx.win(); caption(); G.light=clamp(G.light+(G.finale?0.25:0.1),0,1);
   for(var q=0;q<44;q++) addPart({x:rand(0,W)+camX,y:rand(0,H),vy:rand(-120,-20),vx:rand(-60,60),grav:120,life:1.8,col:(q%2?'rgba(242,201,76,0.9)':'rgba(255,255,255,0.9)'),r:rand(2,4)});
