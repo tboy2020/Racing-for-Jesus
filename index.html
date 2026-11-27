@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Racing for Jesus</title>
+<meta name="description" content="A co-op Bible driving-and-mission adventure — carry the Word to the world. © 2026 Taiwo Adegoke.">
+<meta name="author" content="Taiwo Adegoke">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;700;800&display=swap">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; background:#05080f; overflow:hidden; font-family:'Inter',system-ui,sans-serif; color:#eaf0ff; }
+  #c{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #cap{ position:fixed; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); transform:translateX(-50%); width:min(880px,92vw); text-align:center; opacity:0; transition:opacity .4s; pointer-events:none; z-index:6; }
+  #cap.on{ opacity:1; }
+  #cap .word{ display:block; font-family:'Cinzel',Georgia,'Times New Roman',serif; font-weight:800; color:#f6d98a; font-size:clamp(15px,2.3vw,22px); line-height:1.4; text-shadow:0 2px 12px rgba(0,0,0,.85); }
+  #cap .word::before{ content:'✦ '; color:#ffe9a8; }
+  #cap .ref{ display:block; margin-top:4px; font-family:'Cinzel',Georgia,serif; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:#d8b86a; font-size:clamp(10px,1.4vw,13px); }
+  #cap .narr{ display:block; font-style:italic; font-weight:400; color:#cfe0ff; font-size:clamp(13px,1.9vw,17px); line-height:1.45; text-shadow:0 2px 10px rgba(0,0,0,.85); }
+  #screen{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 30%,rgba(16,26,48,.88),rgba(4,7,14,.97)); z-index:10; padding:24px; }
+  #screen.on{ display:flex; }
+  .card{ max-width:580px; text-align:center; }
+  .card h1{ font-family:'Cinzel',Georgia,serif; font-size:clamp(28px,6.4vw,50px); font-weight:800; color:#f6d98a; letter-spacing:.02em; text-shadow:0 4px 24px rgba(0,0,0,.7); }
+  .card h1 small{ display:block; font-size:clamp(11px,2vw,15px); letter-spacing:.2em; text-transform:uppercase; color:#9fb2d8; font-weight:600; margin-top:8px; }
+  .card p{ margin:16px 0; color:#dce6ff; line-height:1.55; font-size:clamp(14px,2.1vw,17px); }
+  .card b{ color:#f6d98a; }
+  #scrBtn{ font:800 17px 'Inter',sans-serif; color:#10213a; background:linear-gradient(180deg,#ffdf9a,#f2c14e); border:0; border-radius:40px; padding:14px 30px; cursor:pointer; box-shadow:0 8px 24px rgba(242,193,78,.3); }
+  #scrBtn:active{ transform:translateY(1px); }
+  #scrHint{ margin-top:14px; color:#8296bd; font-size:12px; }
+  #touch{ position:fixed; inset:0; z-index:5; display:none; pointer-events:none; }
+  #touch .tbtn{ position:absolute; pointer-events:auto; display:flex; align-items:center; justify-content:center; background:rgba(20,32,56,.5); border:2px solid rgba(180,200,240,.28); border-radius:50%; color:#eaf0ff; user-select:none; }
+  #rotate{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#05080f; color:#9fb2d8; font-size:18px; text-align:center; z-index:20; padding:30px; }
+  #rotate.on{ display:flex; }
+  .foot{ position:fixed; left:50%; bottom:2px; transform:translateX(-50%); font-size:9px; color:rgba(150,170,210,.4); z-index:4; pointer-events:none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cap"><div id="capInner"></div></div>
+<div id="touch"></div>
+<div id="screen"><div class="card">
+  <h1 id="scrTitle">Racing for Jesus<small>The Great Commission Road</small></h1>
+  <p id="scrText"></p>
+  <button id="scrBtn">▶ Begin</button>
+  <div id="scrHint"></div>
+</div></div>
+<div id="rotate">Please turn your phone sideways 🔄<br>to carry the Word</div>
+<div class="foot">© 2026 Taiwo Adegoke · All rights reserved · Scripture: KJV (public domain)</div>
+<script>
+/* ============================================================================
+   RACING FOR JESUS — "The Great Commission Road"
+   ACT I — Daniel's City of Prayer (Scenes 1–10).  © 2026 Taiwo Adegoke.
+   Single-file HTML5 canvas, 960x540 letterboxed, top-down. Child-safe (ages ~4-8):
+   no death; the "enemy" is only darkness that recedes as the light grows.
+   GUARDRAIL: real KJV shown DISTINCT (gold Cinzel + ✦ + ref, caption('word'));
+   invented mission narration stays plain (caption('narr')).
+   ============================================================================ */
+var W=960, H=540;
+var cv=document.getElementById('c'), ctx=cv.getContext('2d');
+var DPR=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+var scale=1, offX=0, offY=0;
+function resize(){ var vw=window.innerWidth, vh=window.innerHeight; scale=Math.min(vw/W,vh/H); var dw=W*scale,dh=H*scale; offX=(vw-dw)/2; offY=(vh-dh)/2; cv.width=Math.round(vw*DPR); cv.height=Math.round(vh*DPR); cv.style.width=vw+'px'; cv.style.height=vh+'px'; document.getElementById('rotate').classList.toggle('on', vh>vw*1.15 && vw<620); }
+window.addEventListener('resize',resize); resize();
+function applyCam(){ ctx.setTransform(scale*DPR,0,0,scale*DPR, offX*DPR, offY*DPR); }
+
+/* ---------- helpers ---------- */
+var TAU=Math.PI*2;
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function rand(a,b){ return a+Math.random()*(b-a); }
+function vgrad(x0,y0,x1,y1,st){ var g=ctx.createLinearGradient(x0,y0,x1,y1); for(var i=0;i<st.length;i++) g.addColorStop(st[i][0],st[i][1]); return g; }
+function rgrad(x,y,r0,r1,st){ var g=ctx.createRadialGradient(x,y,r0,x,y,r1); for(var i=0;i<st.length;i++) g.addColorStop(st[i][0],st[i][1]); return g; }
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function mixHex(a,b,k){ k=clamp(k,0,1); return 'rgb('+[0,1,2].map(function(i){ return Math.round(lerp(parseInt(a.substr(1+i*2,2),16),parseInt(b.substr(1+i*2,2),16),k)); }).join(',')+')'; }
+function dist(ax,ay,bx,by){ return Math.hypot(ax-bx,ay-by); }
+
+/* ---------- audio ---------- */
+var AC=null;
+function actx(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC=null; } } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function tone(f,d,ty,v,sl){ var a=actx(); if(!a) return; var o=a.createOscillator(), g=a.createGain(); o.type=ty||'sine'; o.frequency.value=f; if(sl) o.frequency.exponentialRampToValueAtTime(sl,a.currentTime+d); g.gain.value=0.0001; g.gain.exponentialRampToValueAtTime(v||0.2,a.currentTime+0.02); g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+d); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+d+0.02); }
+function noiseBurst(d,v,lp){ var a=actx(); if(!a) return; var n=a.createBufferSource(), buf=a.createBuffer(1,a.sampleRate*d,a.sampleRate), da=buf.getChannelData(0); for(var i=0;i<da.length;i++) da[i]=(Math.random()*2-1)*(1-i/da.length); n.buffer=buf; var f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1200; var g=a.createGain(); g.gain.value=v||0.2; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+d); n.connect(f); f.connect(g); g.connect(a.destination); n.start(); }
+var sfx={
+  deliver:function(){ tone(760,0.09,'square',0.08,1180); setTimeout(function(){tone(1180,0.1,'square',0.06);},70); },
+  bless:function(){ [660,880,1320].forEach(function(f,i){ setTimeout(function(){tone(f,0.5,'sine',0.1);},i*90); }); },
+  load:function(){ noiseBurst(0.08,0.07,500); tone(300,0.1,'sine',0.07,440); },
+  pray:function(){ tone(523,0.6,'sine',0.1); setTimeout(function(){tone(784,0.7,'sine',0.09);},150); setTimeout(function(){tone(1047,0.8,'sine',0.07);},300); },
+  shield:function(){ tone(900,0.14,'triangle',0.1,1500); noiseBurst(0.2,0.08,2000); },
+  truck:function(){ tone(160,0.3,'sawtooth',0.08,120); noiseBurst(0.3,0.06,400); },
+  gate:function(){ tone(400,0.3,'sine',0.1,800); setTimeout(function(){tone(900,0.4,'sine',0.08);},150); },
+  win:function(){ [523,659,784,1047,1319].forEach(function(f,i){ setTimeout(function(){tone(f,0.5,'sine',0.11);},i*130); }); }
+};
+
+/* ---------- caption (the guardrail) ---------- */
+var capEl=document.getElementById('cap'), capInner=document.getElementById('capInner');
+function caption(kind,text,ref){ if(!text){ capEl.classList.remove('on'); return; } if(kind==='word') capInner.innerHTML='<span class="word">'+text+'</span>'+(ref?'<span class="ref">'+ref+'</span>':''); else capInner.innerHTML='<span class="narr">'+text+'</span>'; capEl.classList.add('on'); }
+
+/* ============================================================================
+   REAL KJV (public domain, exact) — the Word given, by feeling.
+   (For the full game these resolve from Selah's src/kjv.json.)
+   ============================================================================ */
+var VERSES={
+  afraid:  {text:'Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee.', ref:'Isaiah 41:10'},
+  sad:     {text:'The LORD is nigh unto them that are of a broken heart; and saveth such as be of a contrite spirit.', ref:'Psalm 34:18'},
+  troubled:{text:'Let not your heart be troubled: ye believe in God, believe also in me.', ref:'John 14:1'},
+  weary:   {text:'Come unto me, all ye that labour and are heavy laden, and I will give you rest.', ref:'Matthew 11:28'},
+  lonely:  {text:'I will never leave thee, nor forsake thee.', ref:'Hebrews 13:5'},
+  worried: {text:'Casting all your care upon him; for he careth for you.', ref:'1 Peter 5:7'},
+  ashamed: {text:'There is therefore now no condemnation to them which are in Christ Jesus.', ref:'Romans 8:1'},
+  hopeless:{text:'For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.', ref:'Jeremiah 29:11'},
+  sick:    {text:'He healeth the broken in heart, and bindeth up their wounds.', ref:'Psalm 147:3'},
+  unloved: {text:'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.', ref:'John 3:16'},
+  overwhelmed:{text:'For my yoke is easy, and my burden is light.', ref:'Matthew 11:30'},
+  confused:{text:'Trust in the LORD with all thine heart; and lean not unto thine own understanding.', ref:'Proverbs 3:5'},
+  inneed:  {text:'But my God shall supply all your need according to his riches in glory by Christ Jesus.', ref:'Philippians 4:19'},
+  small:   {text:'I will praise thee; for I am fearfully and wonderfully made.', ref:'Psalm 139:14'},
+  betrayed:{text:'But as for you, ye thought evil against me; but God meant it unto good… to save much people alive.', ref:'Genesis 50:20'},
+  forgotten:{text:'Behold, I have graven thee upon the palms of my hands; thy walls are continually before me.', ref:'Isaiah 49:16'}
+};
+
+/* ---------- input ---------- */
+var keys={};
+addEventListener('keydown',function(e){ keys[e.code]=true; if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.code)>=0) e.preventDefault(); actx();
+  if(humanCount()===0 && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS','Space','KeyF','KeyE','Enter'].indexOf(e.code)>=0) ensureLocalPlayer(); });
+addEventListener('keyup',function(e){ keys[e.code]=false; });
+var touchV={x:0,y:0,act:false};
+function readPads(){ return (navigator.getGamepads&&navigator.getGamepads())||[]; }
+var padSeen=false;
+/* ============================================================================
+   COUCH CO-OP — 2–8 players share ONE vehicle & ONE camera (never split-screen).
+   STRICT Driver owns the wheel; other players assist (aligned only) + man a seat.
+   Any player can help with the context action; an AI net fills every empty/idle
+   seat so a solo 4-year-old is NEVER stuck. Connecting a pad turns on TV Mode.
+   (Plumbing adapted from the Pastor's david-coop.html; cap raised 4→8.)
+   ============================================================================ */
+var MAXP=8, TV=false, prevPad={}, actingPlayer=null;
+var COLORS=[
+  {name:'Blue',hue:'#5a8fd0'},{name:'Green',hue:'#4fd08a'},{name:'Gold',hue:'#f2c14e'},{name:'Rose',hue:'#ec74a8'},
+  {name:'Sky',hue:'#53d6e0'},{name:'Coral',hue:'#ff8a5c'},{name:'Violet',hue:'#b38cf0'},{name:'Lime',hue:'#bfe36a'}
+];
+var SEATS=['Driver','Hugger','Watchman','Loader','Navigator','Lookout','Light-Bearer','Helper'];
+var players=[];
+function activePlayers(){ return players.filter(function(p){ return !p.inactive; }); }
+function humanCount(){ return activePlayers().length; }
+function seatOf(seat){ for(var i=0;i<players.length;i++){ var p=players[i]; if(!p.inactive && p.seat===seat) return p; } return null; }
+function nextSeat(){ for(var s=0;s<SEATS.length;s++){ if(!seatOf(SEATS[s])) return SEATS[s]; } return SEATS[SEATS.length-1]; }
+function addPlayer(opts){ opts=opts||{}; if(humanCount()>=MAXP) return null;
+  var p={ idx:players.length, col:COLORS[players.length%COLORS.length], seat:nextSeat(),
+    pad:(opts.pad!=null?opts.pad:null), kb:!!opts.kb, touch:!!opts.touch, padId:opts.padId||'', inactive:false,
+    reached:0, pleas:0, prays:0, loads:0, _actPrev:true };
+  players.push(p); return p;
+}
+function ensureLocalPlayer(){ for(var i=0;i<players.length;i++){ if(!players[i].inactive && (players[i].kb||players[i].touch)) return players[i]; } return addPlayer({kb:true,touch:true}); }
+function padPressed(gp,i){ return !!(gp&&gp.buttons[i]&&(gp.buttons[i].pressed||gp.buttons[i].value>0.5)); }
+function padEdge(key,gp,i){ var k=key+':'+i, now=padPressed(gp,i), was=prevPad[k]; prevPad[k]=now; return now&&!was; }
+function claimedPad(i){ for(var k=0;k<players.length;k++){ if(!players[k].inactive && players[k].pad===i) return true; } return false; }
+function pollJoins(){ var gs=readPads();
+  for(var i=0;i<gs.length && i<MAXP;i++){ var gp=gs[i]; if(!gp) continue; padSeen=true; TV=true;
+    if(claimedPad(i)) continue;
+    var join=padPressed(gp,0)||padPressed(gp,1)||padPressed(gp,2)||padPressed(gp,3)
+           ||Math.abs(gp.axes[0]||0)>0.5||Math.abs(gp.axes[1]||0)>0.5||padPressed(gp,12)||padPressed(gp,13)||padPressed(gp,14)||padPressed(gp,15);
+    if(!join) continue;
+    var ex=null; for(var r=0;r<players.length;r++){ if(players[r].inactive && players[r].padId && players[r].padId===gp.id){ ex=players[r]; break; } }
+    if(ex){ if(humanCount()>=MAXP) continue; ex.inactive=false; ex.pad=i; ex._actPrev=true;
+      for(var q=0;q<players.length;q++){ if(players[q]!==ex && !players[q].inactive && players[q].seat===ex.seat){ ex.seat=nextSeat(); break; } }   // seat was taken while away → re-home
+    } else { var np=addPlayer({pad:i,padId:gp.id}); if(np) np._actPrev=true; }
+    prevPad['m'+i+':0']=true; prevPad['m'+i+':9']=true; actx();   // don't re-read the join press as a menu press
+  }
+}
+addEventListener('gamepadconnected',function(){ TV=true; padSeen=true; });
+addEventListener('gamepaddisconnected',function(e){ for(var i=0;i<players.length;i++){ if(players[i].pad===e.gamepad.index){ players[i].inactive=true; players[i].pad=null; } } });
+function readPlayer(p){ var dx=0,dy=0,act=false,rt=false,lt=false;
+  if(p.kb){ if(keys['ArrowLeft']||keys['KeyA'])dx-=1; if(keys['ArrowRight']||keys['KeyD'])dx+=1; if(keys['ArrowUp']||keys['KeyW'])dy-=1; if(keys['ArrowDown']||keys['KeyS'])dy+=1; if(keys['Space']||keys['KeyF']||keys['KeyE']||keys['Enter'])act=true; }
+  if(p.touch){ dx+=touchV.x; dy+=touchV.y; if(touchV.act)act=true; }
+  if(p.pad!=null){ var gp=readPads()[p.pad]; if(gp){ var ax=gp.axes[0]||0, ay=gp.axes[1]||0; if(Math.abs(ax)>0.3)dx+=ax; if(Math.abs(ay)>0.3)dy+=ay;
+    if(padPressed(gp,14))dx-=1; if(padPressed(gp,15))dx+=1; if(padPressed(gp,12))dy-=1; if(padPressed(gp,13))dy+=1;
+    if(padPressed(gp,0)||padPressed(gp,1)||padPressed(gp,2))act=true; if(padPressed(gp,7))rt=true; if(padPressed(gp,6))lt=true; } }
+  var m=Math.hypot(dx,dy); if(m>1){ dx/=m; dy/=m; }
+  var edge=act&&!p._actPrev; p._actPrev=act;
+  return {dx:dx,dy:dy,act:act,actEdge:edge,rt:rt,lt:lt};
+}
+function readTeam(){
+  var reads=[], anyAct=false, anyEdge=false, rt=false, lt=false, presser=null;
+  for(var j=0;j<players.length;j++){ var p=players[j]; if(p.inactive) continue; var r=readPlayer(p); p._read=r; reads.push({p:p,r:r});
+    if(r.act)anyAct=true; if(r.actEdge){ anyEdge=true; if(!presser)presser=p; } if(r.rt)rt=true; if(r.lt)lt=true; }
+  if(reads.length===0) return {dx:0,dy:0,act:false,actEdge:false,rt:false,lt:false,presser:null};
+  var drv=seatOf('Driver'), lead=drv?drv._read:reads[0].r, leadP=drv||reads[0].p;
+  var dx=lead.dx, dy=lead.dy;
+  for(var k=0;k<reads.length;k++){ if(reads[k].p===leadP) continue; var r2=reads[k].r, mag=Math.hypot(r2.dx,r2.dy); if(mag<0.1) continue;
+    var dot=dx*r2.dx+dy*r2.dy; if(dot>=0 || (Math.abs(dx)+Math.abs(dy))<0.05){ dx+=r2.dx*0.35; dy+=r2.dy*0.35; } }    // aligned assist only — can't fight the wheel
+  var m=Math.hypot(dx,dy); if(m>1){ dx/=m; dy/=m; }
+  return {dx:dx,dy:dy,act:anyAct,actEdge:anyEdge,rt:rt,lt:lt,presser:presser};
+}
+var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+function setupTouch(){
+  var box=document.getElementById('touch'); box.innerHTML='';
+  function mk(html,css){ var b=document.createElement('div'); b.className='tbtn'; b.style.cssText='width:64px;height:64px;font-size:22px;position:absolute;'+css; b.innerHTML=html; box.appendChild(b); return b; }
+  function bind(el,setter){ el.addEventListener('touchstart',function(e){e.preventDefault();setter(true);actx();if(humanCount()===0)ensureLocalPlayer();},{passive:false}); el.addEventListener('touchend',function(e){e.preventDefault();setter(false);},{passive:false}); el.addEventListener('mousedown',function(e){e.preventDefault();setter(true);actx();if(humanCount()===0)ensureLocalPlayer();}); addEventListener('mouseup',function(){setter(false);}); }
+  var L='left:calc(16px + env(safe-area-inset-left));', R='right:calc(16px + env(safe-area-inset-right));', b='env(safe-area-inset-bottom)';
+  bind(mk('▲','left:calc(88px + env(safe-area-inset-left));bottom:calc(92px + '+b+');'),function(v){touchV.y=v?-1:0;});
+  bind(mk('▼','left:calc(88px + env(safe-area-inset-left));bottom:calc(22px + '+b+');'),function(v){touchV.y=v?1:0;});
+  bind(mk('◀',L+'bottom:calc(57px + '+b+');'),function(v){touchV.x=v?-1:0;});
+  bind(mk('▶','left:calc(160px + env(safe-area-inset-left));bottom:calc(57px + '+b+');'),function(v){touchV.x=v?1:0;});
+  bind(mk('✦',R+'bottom:calc(24px + '+b+');width:82px;height:82px;font-size:28px;background:rgba(242,193,78,.25);border-color:rgba(255,220,140,.5);'),function(v){touchV.act=v;});
+  if(isTouch) box.style.display='block';                 // reveal the on-screen controls on touch devices
+}
+setupTouch();
+
+/* ============================================================================
+   SCENES — Act I: Daniel's City of Prayer
+   feel codes map to VERSES. Each scene introduces its one new thing.
+   ============================================================================ */
+var M2840={text:'Go ye therefore, and teach all nations… and, lo, I am with you alway.', ref:'Matthew 28:19-20'};
+var SCENES=[
+ { title:'The Upper Room: Go Ye', sub:'Scene 1 — the sending',
+   open:M2840, winRef:{text:'As my Father hath sent me, even so send I you.', ref:'John 20:21'},
+   intro:'You are sent, like the disciples. Load Bibles at the depot, then carry the Word to each house.',
+   people:[['afraid',150,120],['sad',345,96],['weary',600,110],['lonely',300,380]],
+   depot:[480,474], stations:[], traps:[], cap:3 },
+
+ { title:'Beautiful Feet Lane', sub:'Scene 2 — reach many',
+   open:{text:'How beautiful are the feet of them that preach the gospel of peace.', ref:'Romans 10:15'},
+   winRef:{text:'The harvest truly is plenteous, but the labourers are few.', ref:'Matthew 9:37'},
+   intro:'So many houses waiting for Good News — hurry, and reach them all.',
+   people:[['sad',120,110],['weary',260,96],['lonely',420,100],['worried',600,110],['hopeless',760,120],['afraid',820,300],['troubled',300,380],['unloved',640,390]],
+   depot:[480,474], stations:[], traps:[], cap:3 },
+
+ { title:'The First Sad Face', sub:'Scene 3 — the hug & the Word',
+   open:{text:'Let not your heart be troubled: ye believe in God, believe also in me.', ref:'John 14:1'},
+   winRef:{text:'The LORD is nigh unto them that are of a broken heart.', ref:'Psalm 34:18'},
+   intro:'Give a Bible and a hug — the right Word of God will rise for each heart.',
+   people:[['sad',200,120],['troubled',470,100],['hopeless',720,120],['sad',330,380],['troubled',640,390]],
+   depot:[480,474], stations:[], traps:[], cap:3 },
+
+ { title:'The Light & the Gloom', sub:'Scene 4 — the two meters',
+   open:{text:'The people that walked in darkness have seen a great light.', ref:'Isaiah 9:2'},
+   winRef:{text:'Thy kingdom come, thy will be done in earth, as it is in heaven.', ref:'Matthew 6:10'},
+   intro:'As you carry the Word, the Kingdom light grows and the gloom rolls back.',
+   people:[['worried',160,120],['afraid',360,100],['sad',620,110],['lonely',820,130],['hopeless',260,380],['weary',680,390]],
+   depot:[480,474], stations:[], traps:[[480,270,44]], cap:3 },
+
+ { title:'The Open Window', sub:'Scene 5 — Daniel’s morning prayer',
+   open:{text:'He kneeled upon his knees three times a day, and prayed, and gave thanks before his God.', ref:'Daniel 6:10'},
+   winRef:{text:'Evening, and morning, and at noon, will I pray.', ref:'Psalm 55:17'},
+   intro:'Like Daniel, we STOP to pray. Pray at the open window to open the way on.',
+   people:[['sad',150,130],['afraid',300,110],['worried',120,330],['hopeless',620,120],['lonely',800,130],['troubled',760,340]],
+   depot:[200,470], stations:[[200,90,true]], gate:[470,0], traps:[], cap:3,
+   mandatoryHint:'The way on is shut — pray at Daniel’s window (the chapel) to open it.' },
+
+ { title:'The Snare on the Road', sub:'Scene 6 — plead the Blood',
+   open:{text:'And they overcame him by the blood of the Lamb, and by the word of their testimony.', ref:'Revelation 12:11'},
+   winRef:{text:'When I see the blood, I will pass over you.', ref:'Exodus 12:13'},
+   intro:'Snares of gloom block the road. Plead the Blood of Jesus and pass safely.',
+   people:[['afraid',150,120],['worried',760,120],['sad',150,380],['hopeless',760,380],['lonely',480,110]],
+   depot:[480,474], stations:[], traps:[[320,260,44],[640,260,44],[480,330,42]], cap:3 },
+
+ { title:'The Long Way & the Short Way', sub:'Scene 7 — choose the road',
+   open:{text:'Pray ye therefore the Lord of the harvest, that he would send forth labourers.', ref:'Matthew 9:38'},
+   winRef:{text:'Strait is the gate, and narrow is the way, which leadeth unto life.', ref:'Matthew 7:14'},
+   intro:'A fork in the road. The long way of love blesses more hearts — choose it.',
+   people:[['sad',110,120],['weary',230,100],['lonely',360,96],['worried',500,100],['hopeless',640,110],['afraid',770,340],['troubled',540,330]],
+   depot:[480,474], stations:[], traps:[[700,250,46]], signpost:[480,300], cap:3 },
+
+ { title:'Too Many to Carry', sub:'Scene 8 — the Gospel Truck',
+   open:{text:'Go ye into all the world, and preach the gospel to every creature.', ref:'Mark 16:15'},
+   winRef:{text:'The harvest truly is plenteous, but the labourers are few.', ref:'Matthew 9:37'},
+   intro:'So many Bibles to carry! A little car is not enough — bring the big truck.',
+   people:[['sad',110,100],['weary',230,96],['lonely',360,92],['worried',500,96],['hopeless',640,104],['afraid',780,118],['unloved',150,330],['inneed',330,380],['overwhelmed',560,384],['small',780,340]],
+   depot:[480,474], truck:[690,474], stations:[], traps:[], cap:3 },
+
+ { title:'The Fourth Man in the Glow', sub:'Scene 9 — comfort the afraid',
+   open:{text:'Lo, I see four men loose, walking in the midst of the fire… and the form of the fourth is like the Son of God.', ref:'Daniel 3:25'},
+   winRef:{text:'Fear thou not; for I am with thee: be not dismayed; for I am thy God.', ref:'Isaiah 41:10'},
+   intro:'A dark, fearful place — but One walks WITH you. His light covers you; no gloom can harm.',
+   people:[['afraid',160,130],['afraid',360,110],['worried',620,120],['afraid',800,320],['troubled',300,380],['sad',660,390]],
+   depot:[480,474], stations:[], traps:[[480,250,52],[260,250,46]], dim:true, cap:3 },
+
+ { title:'The Lions’ Court', sub:'Scene 10 — the everlasting kingdom',
+   open:{text:'My God hath sent his angel, and hath shut the lions’ mouths, that they have not hurt me.', ref:'Daniel 6:22'},
+   winRef:{text:'And the kingdom… shall be given to the people of the saints of the most High, whose kingdom is an everlasting kingdom.', ref:'Daniel 7:27'},
+   intro:'The whole city at last. Deliver, plead the Blood, and PRAY — prayer makes the darkness flee and the city bloom.',
+   people:[['sad',140,120],['afraid',320,100],['worried',640,110],['hopeless',820,130],['lonely',150,360],['troubled',820,350],['unloved',360,390],['weary',640,392]],
+   depot:[480,474], stations:[[480,90,false]], traps:[[300,270,44],[660,270,44]], finale:true, cap:3 },
+
+ /* ===== ACT II — Abraham’s Road & Joseph’s Egypt (Scenes 11–20) ===== */
+
+ { title:'Get Thee Out', sub:'Scene 11 — set forth, like Abraham',
+   open:{text:'Now the LORD had said unto Abram, Get thee out of thy country… unto a land that I will shew thee.', ref:'Genesis 12:1'},
+   winRef:{text:'By faith Abraham, when he was called to go out… obeyed; and he went out, not knowing whither he went.', ref:'Hebrews 11:8'},
+   intro:'Like Abraham, set out for a new land. Little markers on the roads show what lies ahead — carry the Word to every house.',
+   people:[['afraid',140,120],['worried',300,96],['lonely',470,110],['sad',640,96],['weary',800,120],['hopeless',220,360],['troubled',560,380],['unloved',760,350]],
+   depot:[480,474], stations:[], traps:[[480,250,42]], ribbon:true, desert:true, prop:'tent', cap:3 },
+
+ { title:'Lot’s Fork', sub:'Scene 12 — the long way of love',
+   open:{text:'Is not the whole land before thee? separate thyself, I pray thee, from me… if thou wilt take the left hand, then I will go to the right.', ref:'Genesis 13:9'},
+   winRef:{text:'Arise, walk through the land in the length of it and in the breadth of it; for I will give it unto thee.', ref:'Genesis 13:17'},
+   intro:'A fork in the road. Abram let Lot choose first and took the humble way — the long road of LOVE reaches the most hearts.',
+   people:[['sad',90,120],['lonely',130,230],['weary',200,340],
+           ['worried',430,96],['hopeless',560,110],['afraid',690,96],['troubled',810,120],['unloved',760,330],['inneed',560,360],['small',430,372]],
+   depot:[300,474], stations:[], traps:[], signpost:[300,300], ribbon:true, prop:'well', cap:3 },
+
+ { title:'The Three Visitors', sub:'Scene 13 — welcome the stranger',
+   open:{text:'And he lift up his eyes and looked, and, lo, three men stood by him: and… he ran to meet them from the tent door, and bowed himself.', ref:'Genesis 18:2'},
+   winRef:{text:'Be not forgetful to entertain strangers: for thereby some have entertained angels unawares.', ref:'Hebrews 13:2'},
+   intro:'Strangers at the tent in the heat of the day. Run to welcome them — a hug and the right Word for each.',
+   people:[['lonely',180,120],['weary',360,100],['unloved',540,110],['sad',720,120],['afraid',260,360],['worried',480,380],['troubled',700,360]],
+   depot:[480,474], stations:[], traps:[], desert:true, prop:'tent', cap:3 },
+
+ { title:'Jehovah-Jireh', sub:'Scene 14 — God will provide',
+   open:{text:'My son, God will provide himself a lamb… so they went both of them together.', ref:'Genesis 22:8'},
+   winRef:{text:'And Abraham called the name of that place Jehovahjireh: as it is said to this day, In the mount of the LORD it shall be seen.', ref:'Genesis 22:14'},
+   intro:'So many to reach, and the little car runs low. Trust — God provides. Take the big truck He gives, and carry more of the Word.',
+   people:[['sad',110,100],['weary',240,96],['lonely',380,92],['worried',520,96],['hopeless',660,104],['afraid',790,118],['inneed',160,340],['overwhelmed',360,380],['unloved',580,384],['small',780,340]],
+   depot:[300,474], truck:[640,474], stations:[], traps:[], desert:true, prop:'altar', cap:3 },
+
+ { title:'The Noonday Altar', sub:'Scene 15 — pray like Daniel (noon)',
+   open:{text:'And there he builded an altar unto the LORD, and called upon the name of the LORD.', ref:'Genesis 12:8'},
+   winRef:{text:'Evening, and morning, and at noon, will I pray, and cry aloud: and he shall hear my voice.', ref:'Psalm 55:17'},
+   intro:'It is noon of the Kingdom Day. Like Daniel, the whole party must STOP at the altar and pray before the way opens on.',
+   people:[['afraid',150,130],['sad',300,110],['worried',120,330],['hopeless',640,120],['lonely',820,130],['troubled',770,340]],
+   depot:[200,470], stations:[[200,90,true]], gate:[470,0], traps:[], desert:true, prop:'altar', cap:3,
+   mandatoryHint:'The way on is shut — pray at the altar (like Daniel) to open it.' },
+
+ { title:'The Dream and the Pit', sub:'Scene 16 — comfort the betrayed',
+   open:{text:'When my father and my mother forsake me, then the LORD will take me up.', ref:'Psalm 27:10'},
+   winRef:{text:'But as for you, ye thought evil against me; but God meant it unto good… to save much people alive.', ref:'Genesis 50:20'},
+   intro:'Some hearts are hurt by their own, as Joseph was. Bring them the Word for the betrayed and forsaken.',
+   people:[['betrayed',160,120],['betrayed',360,100],['sad',620,110],['betrayed',800,320],['lonely',300,380],['unloved',660,390],['troubled',120,330]],
+   depot:[480,474], stations:[], traps:[], cap:3 },
+
+ { title:'Fleeing the Snare', sub:'Scene 17 — flee, and find the way of escape',
+   open:{text:'There hath no temptation taken you but such as is common to man… but will with the temptation also make a way to escape.', ref:'1 Corinthians 10:13'},
+   winRef:{text:'How then can I do this great wickedness, and sin against God?', ref:'Genesis 39:9'},
+   intro:'Snares glitter beside the road to pull you in. Like Joseph, FLEE — steer away, and take the way of escape.',
+   people:[['afraid',150,120],['worried',770,120],['sad',150,380],['hopeless',780,380],['lonely',480,110],['weary',480,400]],
+   depot:[480,474], stations:[], traps:[[330,250,46],[630,250,46],[480,300,44]], evadeMode:'flee', cap:3 },
+
+ { title:'The Forgotten', sub:'Scene 18 — stop and seek',
+   open:{text:'Yet did not the chief butler remember Joseph, but forgat him.', ref:'Genesis 40:23'},
+   winRef:{text:'…It is not in me: God shall give Pharaoh an answer of peace.', ref:'Genesis 41:16'},
+   intro:'Many feel forgotten, like Joseph in prison. Comfort them — and STOP to seek, and let God give the answer.',
+   people:[['forgotten',150,120],['forgotten',340,100],['forgotten',760,120],['sad',820,330],['lonely',300,380],['hopeless',600,390],['forgotten',120,330]],
+   depot:[480,474], stations:[[480,96,false,'seek']], traps:[], prop:'prison', cap:3 },
+
+ { title:'Storehouses of Egypt', sub:'Scene 19 — store up the Word',
+   open:{text:'And Joseph gathered corn as the sand of the sea, very much, until he left numbering; for it was without number.', ref:'Genesis 41:49'},
+   winRef:{text:'And he gathered up all the food of the seven years… and laid up the food in the cities.', ref:'Genesis 41:48'},
+   intro:'A great harvest is coming! Like Joseph, store up much — bring the big truck, fill it, and reach them all.',
+   people:[['sad',90,96],['weary',210,92],['lonely',330,90],['worried',450,94],['hopeless',570,96],['afraid',690,100],['troubled',810,110],['unloved',140,330],['inneed',300,380],['overwhelmed',480,392],['small',660,384],['forgotten',820,340]],
+   depot:[280,474], truck:[640,474], stations:[], traps:[], desert:true, prop:'granary', cap:3 },
+
+ { title:'Feeding All Nations', sub:'Scene 20 — forgive, and feed the world',
+   open:{text:'And all countries came into Egypt to Joseph for to buy corn; because that the famine was so sore in all lands.', ref:'Genesis 41:57'},
+   winRef:{text:'And be ye kind one to another, tenderhearted, forgiving one another, even as God for Christ’s sake hath forgiven you.', ref:'Ephesians 4:32'},
+   intro:'All nations come for bread. Use every gift — deliver, pray, and plead the Blood — and, like Joseph, FORGIVE. The world turns to colour.',
+   people:[['afraid',120,110],['sad',280,96],['worried',470,96],['hopeless',660,104],['lonely',820,120],['unloved',150,340],['inneed',340,384],['betrayed',540,390],['forgotten',740,350],['small',480,124]],
+   depot:[480,474], stations:[[480,90,false]], traps:[[300,270,44],[660,270,44]], finale:true, forgive:true, desert:true, prop:'granary', cap:3 },
+];
+
+/* ---------- acts (the continuous journey) ---------- */
+var ACTS=[
+  {roman:'I',  name:'Daniel’s City of Prayer',        start:0,  end:9 },
+  {roman:'II', name:'Abraham’s Road & Joseph’s Egypt', start:10, end:19}
+];
+function actOf(i){ for(var a=0;a<ACTS.length;a++){ if(i>=ACTS[a].start && i<=ACTS[a].end) return ACTS[a]; } return ACTS[ACTS.length-1]; }
+
+/* ============================================================================
+   STATE
+   ============================================================================ */
+var t=0, shake=0, parts=[];
+function addPart(o){ o.life=o.life||1; o.age=0; parts.push(o); }
+function updateParts(dt){ for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.age+=dt; p.x+=(p.vx||0)*dt; p.y+=(p.vy||0)*dt; if(p.grav) p.vy=(p.vy||0)+p.grav*dt; if(p.age>=p.life) parts.splice(i,1); } }
+var car={ x:480,y:470,vx:0,vy:0,ang:-Math.PI/2 };
+var PROG={ souls:0 };            // lifetime souls across the act
+var sceneIdx=0, G={};
+
+function buildScene(i){
+  var s=SCENES[i]; sceneIdx=i;
+  var people=s.people.map(function(p){ return {feel:p[0], x:p[1], y:p[2], reached:false, bloom:0, bob:rand(0,TAU)}; });
+  G={
+    cfg:s, title:s.title, sub:s.sub,
+    people:people, total:people.length,
+    depot:{x:s.depot[0],y:s.depot[1]},
+    truck: s.truck?{x:s.truck[0],y:s.truck[1]}:null,
+    stations:(s.stations||[]).map(function(st){ return {x:st[0],y:st[1],mandatory:!!st[2],kind:st[3]||'pray',prayed:false}; }),
+    traps:(s.traps||[]).map(function(tr){ return {x:tr[0],y:tr[1],r:tr[2],armed:true,shieldT:0,warnT:0}; }),
+    gate: s.gate?{x:s.gate[0],open:false}:null,
+    signpost: s.signpost?{x:s.signpost[0],y:s.signpost[1]}:null,
+    dim:!!s.dim, finale:!!s.finale, mandatoryHint:s.mandatoryHint,
+    cap:s.cap||3, vehicle:'car', cargo:0, souls:0,
+    light:0, sun:0, evening:false,
+    praying:false, prayT:0, prayMin:0, idle:0, done:false, started:false, pleadTaught:false, intro:s.intro
+  };
+  var sx=G.depot.x, sy=G.depot.y-6;
+  car.x=sx; car.y=sy; car.vx=0; car.vy=0; car.ang=-Math.PI/2;
+}
+
+function nearNode(){
+  if(G.truck && dist(car.x,car.y,G.truck.x,G.truck.y)<46 && G.vehicle!=='truck') return {type:'truck'};
+  if(dist(car.x,car.y,G.depot.x,G.depot.y)<46) return {type:'depot'};
+  for(var i=0;i<G.stations.length;i++){ if(dist(car.x,car.y,G.stations[i].x,G.stations[i].y)<44) return {type:'station',s:G.stations[i]}; }
+  var best=null,bd=48;
+  for(var j=0;j<G.people.length;j++){ var p=G.people[j]; if(p.reached) continue; var d=dist(car.x,car.y,p.x,p.y); if(d<bd){ bd=d; best={type:'person',p:p}; } }
+  return best;
+}
+
+/* ============================================================================
+   UPDATE
+   ============================================================================ */
+function doDeliver(p){
+  p.reached=true; p.bloom=0.001; G.cargo--; G.souls++; PROG.souls++;
+  var hg=seatOf('Hugger')||actingPlayer; if(hg) hg.reached++;      // co-op credit for the roster
+  G.light=clamp(G.light + 1/G.total, 0, 1);
+  var v=VERSES[p.feel]||VERSES.sad; caption('word', v.text, v.ref);
+  sfx.deliver(); sfx.bless();
+  for(var q=0;q<18;q++) addPart({x:p.x,y:p.y-10,vx:rand(-70,70),vy:rand(-150,-30),grav:260,life:1.2,col:(q%2?'rgba(255,220,140,0.9)':'rgba(255,255,255,0.9)'),r:rand(2,4)});
+  if(G.souls>=G.total) setTimeout(winScene,1400);
+}
+function startPray(st){ G.praying=true; G.prayT=0; G.prayMin=0; G.prayStation=st;
+  if(st && st.kind==='seek'){ G.prayLabel='Be still, and seek…';
+    caption('word','Be still, and know that I am God: I will be exalted among the heathen, I will be exalted in the earth.','Psalm 46:10'); }
+  else { G.prayLabel='Breathe, and pray like Daniel…';
+    caption('word','He kneeled upon his knees three times a day, and prayed, and gave thanks before his God, as he did aforetime.','Daniel 6:10'); } }
+/* ---- the never-stuck AI net: fills empty/idle seats so a solo child always finishes ---- */
+function markActive(I){ if(Math.abs(I.dx)+Math.abs(I.dy)>0.08 || I.act || I.rt || I.lt) G.idle=0; }
+function aiTarget(){                                             // the UNBLOCK priority list
+  if(G.gate && !G.gate.open){ for(var i=0;i<G.stations.length;i++){ var s=G.stations[i]; if(s.mandatory && !s.prayed) return {x:s.x,y:s.y}; } }
+  var remain=0; for(var j=0;j<G.people.length;j++){ if(!G.people[j].reached) remain++; }
+  if(remain>0 && G.cargo<=0) return {x:G.depot.x,y:G.depot.y};
+  if(remain>0 && G.cargo>0){ var best=null,bd=1e9; for(var k=0;k<G.people.length;k++){ var p=G.people[k]; if(p.reached) continue; var d=dist(car.x,car.y,p.x,p.y); if(d<bd){bd=d;best=p;} } if(best) return {x:best.x,y:best.y}; }
+  return null;
+}
+function doNode(node){                                          // the context action — human OR AI calls the SAME verbs
+  if(node.type==='depot'){ if(G.cargo<G.cap){ G.cargo=G.cap; sfx.load(); var a=seatOf('Loader')||actingPlayer; if(a)a.loads++;
+    for(var q=0;q<10;q++) addPart({x:G.depot.x,y:G.depot.y-14,vy:rand(-90,-20),vx:rand(-40,40),grav:200,life:0.7,col:'rgba(180,220,255,0.9)',r:rand(2,3)}); } }
+  else if(node.type==='truck'){ G.vehicle='truck'; G.cap=8; G.cargo=Math.min(G.cargo,8); sfx.truck(); caption('narr','The Gospel Truck! Now you can carry far more of the Word. Load up at the depot.'); setTimeout(function(){ if(!G.done) caption(); },2800); }
+  else if(node.type==='station'){ startPray(node.s); }
+  else if(node.type==='person'){ if(G.cargo>0) doDeliver(node.p); else { caption('narr','Out of Bibles — drive back to the depot to load more.'); setTimeout(function(){ if(!G.done) caption(); },2200); } }
+}
+function aiSeats(){                                             // only acts when the humans are idle; any human press pre-empts
+  if(!G.started || G.praying) return;
+  var node=nearNode(); if(!node) return;
+  if(node.type==='depot' && G.cargo<=0 && G.idle>1.5){ actingPlayer=null; doNode(node); }
+  else if(node.type==='person' && G.cargo>0 && G.idle>1.8){ actingPlayer=null; doNode(node); }
+  else if(node.type==='station' && node.s.mandatory && !node.s.prayed && G.gate && !G.gate.open && G.idle>2.0){ actingPlayer=null; startPray(node.s); }
+}
+function update(dt){
+  pollJoins();                                                  // late controllers can join mid-scene
+  var I=readTeam();
+  G.idle=(G.idle||0)+dt;
+  if(G.praying){
+    if(I.act){ G.idle=0; G.prayT=clamp(G.prayT+dt/3.2,0,1); }    // a human holding fills at full rate
+    else if(G.idle>1.2){ G.prayT=clamp(G.prayT+dt/4.2,0,1); }    // else the AI completes it for an idle/solo child
+    G.prayMin=(G.prayMin||0)+dt;
+    if(G.prayT>=1 && G.prayMin>1.0){ G.praying=false; if(G.prayStation){ G.prayStation.prayed=true; var wm=seatOf('Watchman')||actingPlayer; if(wm)wm.prays++; }
+      G.sun=clamp(G.sun-0.4,0,1); G.light=clamp(G.light+0.05,0,1);
+      for(var i=0;i<G.traps.length;i++) G.traps[i].armed=false;                // prayer clears the gloom
+      if(G.gate){ G.gate.open=true; sfx.gate(); for(var q=0;q<20;q++) addPart({x:G.gate.x,y:rand(60,H-40),vx:rand(40,120),vy:rand(-40,40),life:1,col:'rgba(255,230,160,0.9)',r:rand(2,3)}); }
+      if(G.finale){ G.light=clamp(G.light+0.2,0,1); }
+      caption('narr', G.gate?'The way is opened — go on in the strength of prayer.':'Strengthened by prayer — now go on, and carry the Word.'); sfx.pray();
+      setTimeout(function(){ if(!G.done) caption(); },3000); }
+    return;
+  }
+  markActive(I);
+  // AI auto-pilot — drives when the Driver seat is empty, or a solo/idle child has left the wheel for a while (never during the opening verse)
+  if(G.started && (!seatOf('Driver') || G.idle>3.0)){ var tg=aiTarget(); if(tg){ var pa=Math.atan2(tg.y-car.y,tg.x-car.x), ease=dist(car.x,car.y,tg.x,tg.y)<60?0.4:1; I.dx=Math.cos(pa)*ease; I.dy=Math.sin(pa)*ease; } }
+  // drive
+  var acc=640;
+  car.vx += I.dx*acc*dt; car.vy += I.dy*acc*dt;
+  if(I.rt){ car.vx += Math.cos(car.ang)*acc*0.7*dt; car.vy += Math.sin(car.ang)*acc*0.7*dt; }   // RT keep-moving (any pad)
+  if(I.lt){ car.vx *= Math.max(0,1-5*dt); car.vy *= Math.max(0,1-5*dt); }                         // LT brake
+  car.vx *= Math.max(0,1-3.2*dt); car.vy *= Math.max(0,1-3.2*dt);
+  var sp=Math.hypot(car.vx,car.vy), MAX=(G.vehicle==='truck'?205:240); if(sp>MAX){ car.vx*=MAX/sp; car.vy*=MAX/sp; }
+  car.x=clamp(car.x+car.vx*dt,24,W-24); car.y=clamp(car.y+car.vy*dt,54,H-20);
+  if(G.gate && !G.gate.open && car.x>G.gate.x-20){ car.x=G.gate.x-20; car.vx=Math.min(0,car.vx); }   // mandatory prayer gate
+  if(sp>12) car.ang=Math.atan2(car.vy,car.vx);
+  if(!G.done){ G.sun=clamp(G.sun+dt/160,0,1); if(G.sun>=1 && !G.evening){ G.evening=true; caption('narr','Evening came — keep going, there is grace for the journey.'); setTimeout(function(){ if(!G.done) caption(); },3000); } }
+  // traps
+  var flee=(G.cfg.evadeMode==='flee');
+  for(var i=0;i<G.traps.length;i++){ var tr=G.traps[i]; if(tr.shieldT>0) tr.shieldT-=dt; if(!tr.armed) continue;
+    var d=dist(car.x,car.y,tr.x,tr.y), inZone=d<tr.r+10;
+    if(flee){
+      if(inZone){ tr.warnT+=dt; car.vx*=0.9; car.vy*=0.9;
+        if(!G.pleadTaught){ G.pleadTaught=true; caption('word','There hath no temptation taken you but such as is common to man… but will with the temptation also make a way to escape.','1 Corinthians 10:13'); setTimeout(function(){ if(!G.done) caption(); },3600); }
+        else caption('narr','Flee — turn away, and take the way of escape.');
+        if(tr.warnT>2.6){ tr.armed=false; tr.shieldT=1; sfx.shield(); caption('narr','A way of escape — keep going.'); setTimeout(function(){ if(!G.done) caption(); },1600); }
+      } else {
+        if(tr.warnT>0.3){ tr.armed=false; tr.shieldT=1; G.light=clamp(G.light+0.02,0,1); sfx.shield(); shake=4;
+          for(var q=0;q<12;q++){ var a2=q/12*TAU; addPart({x:tr.x,y:tr.y,vx:Math.cos(a2)*95,vy:Math.sin(a2)*95,life:0.6,col:'rgba(210,232,255,0.9)',r:rand(2,3)}); }
+          caption('narr','You fled the snare — well done!'); setTimeout(function(){ if(!G.done) caption(); },1600); }
+        tr.warnT=Math.max(0,tr.warnT-dt);
+      }
+      continue;
+    }
+    if(inZone){
+      tr.warnT+=dt;
+      if(G.dim){ tr.armed=false; tr.shieldT=1; sfx.shield(); caption('narr','The Light is with you — the gloom cannot harm.'); setTimeout(function(){ if(!G.done) caption(); },1800); continue; }
+      if(!G.pleadTaught){ G.pleadTaught=true; caption('word','And they overcame him by the blood of the Lamb, and by the word of their testimony.','Revelation 12:11'); setTimeout(function(){ if(!G.done) caption(); },3400); }
+      if(I.act){ tr.armed=false; tr.shieldT=1; G.light=clamp(G.light+0.02,0,1); sfx.shield(); shake=5;
+        for(var q=0;q<16;q++){ var a=q/16*TAU; addPart({x:car.x,y:car.y,vx:Math.cos(a)*120,vy:Math.sin(a)*120,life:0.6,col:'rgba(255,240,180,0.9)',r:rand(2,3)}); }
+        caption('narr','Covered by the blood of Jesus — safe! Press on.'); setTimeout(function(){ if(!G.done) caption(); },1700);
+      } else if(tr.warnT>2.4){ tr.armed=false; tr.shieldT=1; sfx.shield(); caption('narr','Jesus covers us — let us keep going.'); setTimeout(function(){ if(!G.done) caption(); },1700); }
+      else { car.vx*=0.9; car.vy*=0.9; }
+    } else tr.warnT=Math.max(0,tr.warnT-dt);
+  }
+  // AI fills empty/idle seats (never-stuck); then any player's context action
+  aiSeats();
+  var node=nearNode();
+  if(I.actEdge && node){ actingPlayer=I.presser; doNode(node); }
+  for(var k=0;k<G.people.length;k++){ var pp=G.people[k]; if(pp.reached && pp.bloom<1) pp.bloom=Math.min(1,pp.bloom+dt*1.6); }
+}
+
+/* ============================================================================
+   DRAW
+   ============================================================================ */
+function drawGround(){
+  var g=G.light, dim=G.dim?0.45:1;
+  var desert=!!G.cfg.desert;
+  var top=mixHex('#2b2d36','#8fc2e0',g), bot=mixHex('#1e2028','#cfe6c8',g);
+  if(G.dim){ top=mixHex('#141622','#4a6a8a',g); bot=mixHex('#0f1018','#6a8a68',g); }
+  if(desert){ top=mixHex('#332d26','#f0cf8c',g); bot=mixHex('#241e17','#dcb264',g); }
+  ctx.fillStyle=vgrad(0,0,0,H,[[0,top],[1,bot]]); ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.globalAlpha=0.5*dim;
+  ctx.fillStyle=mixHex('#24262e',desert?'#d9b878':'#a9cf86',g); ctx.beginPath(); ctx.ellipse(W*0.3,H*0.55,260,150,0,0,TAU); ctx.fill();
+  ctx.fillStyle=mixHex('#262830',desert?'#e4c488':'#b7d890',g); ctx.beginPath(); ctx.ellipse(W*0.72,H*0.42,240,160,0,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function drawRoads(){ var g=G.light; ctx.save(); ctx.lineCap='round';
+  // simple ring + spokes feel
+  var pts=G.people.map(function(p){return [p.x,p.y];}); pts.push([G.depot.x,G.depot.y]);
+  ctx.strokeStyle=mixHex('#3a3d47','#c9b79a',g); ctx.lineWidth=20;
+  for(var i=0;i<G.people.length;i++){ ctx.beginPath(); ctx.moveTo(G.depot.x,G.depot.y); ctx.lineTo(G.people[i].x,G.people[i].y); ctx.stroke(); }
+  if(G.gate){ ctx.strokeStyle=mixHex('#3a3d47','#c9b79a',g); ctx.beginPath(); ctx.moveTo(G.depot.x,G.depot.y); ctx.lineTo(W-120,H*0.3); ctx.stroke(); }
+  ctx.restore();
+}
+function drawDepot(){ var d=G.depot; ctx.save(); ctx.translate(d.x,d.y);
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(0,-6,4,54,[[0,'rgba(150,210,255,0.4)'],[1,'rgba(150,210,255,0)']]); ctx.beginPath(); ctx.arc(0,-6,54,0,TAU); ctx.fill(); ctx.restore();
+  ctx.fillStyle='#6a4a30'; rr(-34,-34,68,42,6); ctx.fill(); ctx.fillStyle='#8a6038'; rr(-40,-42,80,12,4); ctx.fill();
+  for(var i=0;i<3;i++){ ctx.fillStyle=['#6a2f3a','#2f4a6a','#2f6a3a'][i]; rr(-14+i*2,-24-i*8,26,7,2); ctx.fill(); ctx.fillStyle='#f2c94c'; ctx.fillRect(-2+i*2,-24-i*8,2,7); }
+  ctx.fillStyle='#eaf0ff'; ctx.font='800 11px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText('BIBLES',0,24); ctx.restore(); ctx.textAlign='left';
+}
+function drawTruckDepot(){ if(!G.truck||G.vehicle==='truck') return; var d=G.truck; ctx.save(); ctx.translate(d.x,d.y);
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(0,-6,4,50,[[0,'rgba(255,210,130,0.4)'],[1,'rgba(255,210,130,0)']]); ctx.beginPath(); ctx.arc(0,-6,50,0,TAU); ctx.fill(); ctx.restore();
+  ctx.fillStyle='#4a6a8a'; rr(-30,-30,38,36,5); ctx.fill(); ctx.fillStyle='#2a3a4a'; rr(-26,-26,30,12,3); ctx.fill();
+  ctx.fillStyle='#8a6038'; rr(8,-20,20,26,3); ctx.fill();
+  ctx.fillStyle='#eaf0ff'; ctx.font='800 11px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText('TRUCK',0,24); ctx.restore(); ctx.textAlign='left';
+}
+function drawStation(st){ ctx.save(); ctx.translate(st.x,st.y);
+  var glow=st.prayed?0.7:0.4+0.2*Math.sin(t*3)+(st.mandatory?0.15:0);
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(0,-4,4,52,[[0,'rgba(200,215,255,'+glow+')'],[1,'rgba(200,215,255,0)']]); ctx.beginPath(); ctx.arc(0,-4,52,0,TAU); ctx.fill(); ctx.restore();
+  ctx.fillStyle='#e8eef8'; rr(-24,-30,48,38,5); ctx.fill();
+  ctx.fillStyle='#cdd8ea'; ctx.beginPath(); ctx.moveTo(-28,-30); ctx.lineTo(0,-50); ctx.lineTo(28,-30); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#f2c94c'; ctx.fillRect(-2,-66,4,16); ctx.fillRect(-7,-60,14,4);
+  ctx.fillStyle='#eaf0ff'; ctx.font='800 11px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText(st.kind==='seek'?'SEEK':(st.mandatory?'PRAY ✦':'PRAY'),0,24); ctx.restore(); ctx.textAlign='left';
+}
+function drawGate(){ if(!G.gate) return; var gx=G.gate.x; ctx.save();
+  if(!G.gate.open){
+    ctx.fillStyle='rgba(28,24,42,0.55)'; ctx.fillRect(gx-10,0,20,H);
+    ctx.strokeStyle='rgba(120,110,150,0.6)'; ctx.lineWidth=4; for(var y=20;y<H;y+=36){ ctx.beginPath(); ctx.moveTo(gx-8,y); ctx.lineTo(gx+8,y); ctx.stroke(); }
+    ctx.fillStyle='#b9a0d0'; ctx.fillRect(gx-14,0,6,H); ctx.fillRect(gx+8,0,6,H);
+  } else {
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(gx,H*0.5,10,120,[[0,'rgba(255,230,160,0.3)'],[1,'rgba(255,230,160,0)']]); ctx.fillRect(gx-120,0,240,H); ctx.restore();
+    ctx.fillStyle='#b9a0d0'; ctx.fillRect(gx-16,0,6,H); ctx.fillRect(gx+10,0,6,H);
+  }
+  ctx.restore();
+}
+function drawSignpost(){ if(!G.signpost) return; var s=G.signpost; ctx.save(); ctx.translate(s.x,s.y);
+  ctx.strokeStyle='#6a4a2a'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-28); ctx.stroke();
+  ctx.fillStyle='#caa05a'; rr(-44,-44,40,14,3); ctx.fill(); rr(4,-44,40,14,3); ctx.fill();
+  ctx.fillStyle='#3a2a18'; ctx.font='700 9px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText('LONG ♥',-24,-34); ctx.fillText('SHORT',24,-34);
+  ctx.restore(); ctx.textAlign='left';
+}
+function drawProps(){ var pr=G.cfg.prop; if(!pr) return; var g=G.light; ctx.save();
+  if(pr==='tent'){ var tx=98,ty=190;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(tx,ty-6,4,74,[[0,'rgba(255,210,130,'+(0.12+0.2*g)+')'],[1,'rgba(255,210,130,0)']]); ctx.beginPath(); ctx.arc(tx,ty-6,74,0,TAU); ctx.fill(); ctx.restore();
+    ctx.fillStyle=mixHex('#463d31','#c99b5a',g); ctx.beginPath(); ctx.moveTo(tx,ty-56); ctx.lineTo(tx-48,ty); ctx.lineTo(tx+48,ty); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=mixHex('#352e26','#a9814a',g); ctx.beginPath(); ctx.moveTo(tx,ty-56); ctx.lineTo(tx-11,ty); ctx.lineTo(tx+11,ty); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=mixHex('#2a251e','#6a4f30',g); ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(tx,ty-62); ctx.lineTo(tx,ty-54); ctx.stroke();
+  }
+  else if(pr==='well'){ var wx=300,wy=180;
+    ctx.fillStyle=mixHex('#3a3a42','#8a9bb0',g); rr(wx-26,wy-6,52,20,6); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(wx,wy+2,2,24,[[0,'rgba(150,200,255,'+(0.2+0.3*g)+')'],[1,'rgba(150,200,255,0)']]); ctx.beginPath(); ctx.ellipse(wx,wy+2,22,8,0,0,TAU); ctx.fill(); ctx.restore();
+    ctx.strokeStyle=mixHex('#3a2f22','#7a5a34',g); ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(wx-22,wy-6); ctx.lineTo(wx-16,wy-34); ctx.moveTo(wx+22,wy-6); ctx.lineTo(wx+16,wy-34); ctx.stroke();
+    ctx.fillStyle=mixHex('#4a3b29','#8a6a3a',g); rr(wx-26,wy-40,52,8,3); ctx.fill();
+  }
+  else if(pr==='altar'){ var ax=200,ay=184;
+    ctx.fillStyle=mixHex('#403a32','#b79a6a',g); rr(ax-26,ay-18,52,26,4); ctx.fill();
+    ctx.fillStyle=mixHex('#4a4238','#cbae7a',g); rr(ax-30,ay-24,60,8,3); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation='lighter'; var fl=0.3+0.2*Math.sin(t*5);
+    ctx.fillStyle=rgrad(ax,ay-26,2,34,[[0,'rgba(255,190,90,'+(0.38+0.3*g)+')'],[1,'rgba(255,150,60,0)']]); ctx.beginPath(); ctx.arc(ax,ay-26,30,0,TAU); ctx.fill();
+    ctx.fillStyle='rgba(255,222,130,'+(0.55+fl)+')'; ctx.beginPath(); ctx.moveTo(ax,ay-48); ctx.quadraticCurveTo(ax+9,ay-30,ax,ay-24); ctx.quadraticCurveTo(ax-9,ay-30,ax,ay-48); ctx.fill(); ctx.restore();
+  }
+  else if(pr==='prison'){ var spots=[[150,158],[772,158]]; for(var i=0;i<spots.length;i++){ var px=spots[i][0],py=spots[i][1];
+    ctx.fillStyle=mixHex('#2e2c34','#7a7f8e',g); rr(px-22,py-26,44,42,4); ctx.fill();
+    ctx.fillStyle=mixHex('#17161c','#3a4150',g); rr(px-15,py-19,30,28,3); ctx.fill();
+    ctx.strokeStyle=mixHex('#52555f','#aab0c0',g); ctx.lineWidth=3; for(var b=-10;b<=10;b+=10){ ctx.beginPath(); ctx.moveTo(px+b,py-19); ctx.lineTo(px+b,py+9); ctx.stroke(); } }
+  }
+  else if(pr==='granary'){ var silos=[[150,118],[W*0.5,104],[812,118]]; for(var i=0;i<silos.length;i++){ var sxx=silos[i][0],syy=silos[i][1];
+    ctx.fillStyle=mixHex('#403a30','#d8b878',g); rr(sxx-22,syy-40,44,70,8); ctx.fill();
+    ctx.fillStyle=mixHex('#4a4336','#e6ca90',g); ctx.beginPath(); ctx.moveTo(sxx-26,syy-40); ctx.lineTo(sxx,syy-62); ctx.lineTo(sxx+26,syy-40); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=mixHex('#332e26','#b89a5a',g); rr(sxx-22,syy-14,44,6,2); ctx.fill(); rr(sxx-22,syy+2,44,6,2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+function drawRibbon(){ if(!G.cfg.ribbon) return; ctx.save();
+  for(var i=0;i<G.people.length;i++){ var p=G.people[i]; if(p.reached) continue;
+    var mx=lerp(G.depot.x,p.x,0.6), my=lerp(G.depot.y,p.y,0.6);
+    ctx.globalAlpha=0.45+0.2*Math.sin(t*3+i); ctx.fillStyle='rgba(255,170,185,0.95)';
+    ctx.beginPath(); ctx.moveTo(mx,my+4); ctx.bezierCurveTo(mx+7,my-4,mx+4,my-9,mx,my-4); ctx.bezierCurveTo(mx-4,my-9,mx-7,my-4,mx,my+4); ctx.fill();
+  }
+  ctx.globalAlpha=0.65;
+  for(var j=0;j<G.traps.length;j++){ var tr=G.traps[j]; if(!tr.armed) continue; ctx.fillStyle='rgba(150,135,185,0.95)'; ctx.font='800 13px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText('!', tr.x, tr.y-tr.r-6); }
+  ctx.textAlign='left'; ctx.restore();
+}
+function drawTrap(tr){ if(!tr.armed && tr.shieldT<=0) return; ctx.save(); ctx.translate(tr.x,tr.y);
+  if(tr.armed){
+    if(G.cfg.evadeMode==='flee'){                                  // a glittering lure — steer away
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=rgrad(0,0,4,tr.r,[[0,'rgba(190,120,220,'+(0.24+0.12*Math.sin(t*4))+')'],[1,'rgba(150,90,200,0)']]); ctx.beginPath(); ctx.arc(0,0,tr.r,0,TAU); ctx.fill();
+      for(var k=0;k<6;k++){ var ka=t*2+k*1.05, kr=tr.r*0.45; ctx.fillStyle='rgba(236,204,255,'+(0.4+0.3*Math.sin(t*3+k))+')'; ctx.beginPath(); ctx.arc(Math.cos(ka)*kr,Math.sin(ka*1.3)*kr*0.7,2.2,0,TAU); ctx.fill(); }
+      ctx.restore();
+    } else {
+      ctx.save(); ctx.globalAlpha=0.5+0.2*Math.sin(t*4); ctx.fillStyle=rgrad(0,0,6,tr.r,[[0,'rgba(30,26,44,0.78)'],[1,'rgba(30,26,44,0)']]); ctx.beginPath(); ctx.arc(0,0,tr.r,0,TAU); ctx.fill(); ctx.restore();
+      for(var i=0;i<5;i++){ var a=t*0.8+i*1.3; ctx.fillStyle='rgba(60,54,80,0.4)'; ctx.beginPath(); ctx.arc(Math.cos(a)*tr.r*0.5,Math.sin(a*1.2)*tr.r*0.4,8,0,TAU); ctx.fill(); }
+    } }
+  if(tr.shieldT>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; var a=tr.shieldT; ctx.strokeStyle='rgba(255,240,180,'+a+')'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(0,0,(1-a)*60+20,0,TAU); ctx.stroke(); ctx.restore(); }
+  ctx.restore();
+}
+function drawLions(){ if(!G.finale) return; var ls=[[150,250],[810,250]]; for(var i=0;i<ls.length;i++){ ctx.save(); ctx.translate(ls[i][0],ls[i][1]);
+  ctx.fillStyle='#c99a52'; ctx.beginPath(); ctx.ellipse(0,0,22,13,0,0,TAU); ctx.fill();
+  ctx.fillStyle='#a9742e'; ctx.beginPath(); ctx.arc(-18,-4,11,0,TAU); ctx.fill(); ctx.fillStyle='#e0b878'; ctx.beginPath(); ctx.arc(-18,-4,7,0,TAU); ctx.fill();
+  ctx.fillStyle='#4a3a24'; ctx.font='700 11px Inter,sans-serif'; ctx.fillText('z',8,-14); ctx.fillText('z',13,-20);
+  ctx.restore(); } }
+function drawPerson(p){ var y=p.y+Math.sin(t*1.5+p.bob)*2; ctx.save(); ctx.translate(p.x,y); var b=p.bloom, reached=p.reached;
+  if(reached){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(0,-8,2,40*b,[[0,'rgba(255,224,150,'+(0.5*b)+')'],[1,'rgba(255,224,150,0)']]); ctx.beginPath(); ctx.arc(0,-8,40,0,TAU); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle=mixHex('#3c3e48','#c98a6a',b); rr(-20,-18,40,26,4); ctx.fill();
+  ctx.fillStyle=mixHex('#4a4d58','#e0a86a',b); ctx.beginPath(); ctx.moveTo(-24,-18); ctx.lineTo(0,-34); ctx.lineTo(24,-18); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=mixHex('#2a2c34','#ffe6a0',b); rr(-6,-12,12,12,2); ctx.fill();
+  var fy=-46; ctx.fillStyle=mixHex('#6a6c76','#ffd98a',b); ctx.beginPath(); ctx.arc(0,fy,12,0,TAU); ctx.fill();
+  ctx.fillStyle='#2a2e3a'; ctx.beginPath(); ctx.arc(-4,fy-2,1.6,0,TAU); ctx.arc(4,fy-2,1.6,0,TAU); ctx.fill();
+  ctx.strokeStyle='#2a2e3a'; ctx.lineWidth=1.6; ctx.beginPath(); if(reached) ctx.arc(0,fy+2,5,0.15*Math.PI,0.85*Math.PI); else ctx.arc(0,fy+7,5,1.15*Math.PI,1.85*Math.PI); ctx.stroke();
+  if(!reached){ ctx.fillStyle='rgba(230,236,255,0.5)'; ctx.font='700 9px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText(p.feel, 0, -64); ctx.textAlign='left'; }
+  ctx.restore();
+}
+function drawCompanion(){ if(!G.dim) return;    // the Fourth Man — a light that walks with you
+  var cx=car.x-Math.cos(car.ang)*26, cy=car.y-Math.sin(car.ang)*26;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.fillStyle=rgrad(car.x,car.y,10,130,[[0,'rgba(255,236,180,0.35)'],[1,'rgba(255,236,180,0)']]); ctx.beginPath(); ctx.arc(car.x,car.y,130,0,TAU); ctx.fill();
+  ctx.fillStyle=rgrad(cx,cy,2,16,[[0,'rgba(255,248,214,0.95)'],[1,'rgba(255,240,180,0)']]); ctx.beginPath(); ctx.arc(cx,cy,16,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function drawVehicle(){ ctx.save(); ctx.translate(car.x,car.y); ctx.rotate(car.ang);
+  if(G.vehicle==='truck'){
+    // the big Gospel Truck — visibly a heavy rig, much larger than the little car
+    ctx.fillStyle='rgba(0,0,0,0.28)'; rr(-42,-22,80,46,10); ctx.fill();            // ground shadow
+    ctx.fillStyle='#23262f';                                                       // 6 wheels peeking out
+    rr(-36,-26,12,8,3); ctx.fill(); rr(-36,18,12,8,3); ctx.fill();
+    rr(-15,-26,12,8,3); ctx.fill(); rr(-15,18,12,8,3); ctx.fill();
+    rr(17,-24,12,8,3); ctx.fill();  rr(17,18,12,8,3); ctx.fill();
+    ctx.fillStyle='#3f73b0'; rr(-41,-23,50,46,6); ctx.fill();                       // long cargo box
+    ctx.fillStyle='#4f86c6'; rr(-41,-23,50,9,6); ctx.fill();                        // roof highlight
+    ctx.fillStyle='#e23b4e'; rr(9,-19,27,38,7); ctx.fill();                         // chunky cab
+    ctx.fillStyle='#c42f40'; rr(9,4,27,15,7); ctx.fill();                           // cab lower shade
+    ctx.fillStyle='#bdeaff'; rr(25,-15,9,30,3); ctx.fill();                         // windshield
+    ctx.fillStyle='#fff6cf'; ctx.beginPath(); ctx.arc(35,-12,3,0,TAU); ctx.fill(); ctx.beginPath(); ctx.arc(35,12,3,0,TAU); ctx.fill(); // headlights
+    ctx.fillStyle='#f2c94c'; rr(-21,-17,11,34,2); ctx.fill(); rr(-29,-6,27,11,2); ctx.fill(); // big gold cross on the box
+  } else {
+    ctx.fillStyle='rgba(0,0,0,0.25)'; rr(-16,-11,34,24,6); ctx.fill();
+    ctx.fillStyle='#e23b4e'; rr(-17,-12,36,24,7); ctx.fill();
+    ctx.fillStyle='#ffd98a'; rr(6,-9,8,18,3); ctx.fill();
+    ctx.fillStyle='#bdeaff'; rr(-8,-9,12,18,3); ctx.fill();
+    ctx.fillStyle='#2a2e3a'; rr(-18,-14,8,5,2); ctx.fill(); rr(-18,9,8,5,2); ctx.fill(); rr(12,-14,8,5,2); ctx.fill(); rr(12,9,8,5,2); ctx.fill();
+    ctx.fillStyle='#fff'; rr(-3,-2,6,4,1); ctx.fill();
+  }
+  ctx.restore();
+  if(G.cargo>0){ ctx.save(); ctx.fillStyle='#f2c94c'; ctx.font='800 12px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText('✝ '+G.cargo, car.x, car.y-(G.vehicle==='truck'?34:24)); ctx.restore(); ctx.textAlign='left'; }
+}
+function drawParts(){ for(var i=0;i<parts.length;i++){ var p=parts[i]; ctx.globalAlpha=clamp(1-p.age/p.life,0,1); ctx.fillStyle=p.col||'#fff'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r||2,0,TAU); ctx.fill(); } ctx.globalAlpha=1; }
+function drawHUD(){
+  var x=16,y=16,w=280,h=15;
+  ctx.fillStyle='rgba(8,14,26,0.55)'; rr(x-6,y-6,w+12,h+26,9); ctx.fill();
+  ctx.fillStyle='#2a2c38'; rr(x,y,w,h,8); ctx.fill();
+  ctx.fillStyle=vgrad(x,0,x+w,0,[[0,'#ffe08a'],[1,'#f2a93e']]); rr(x,y,Math.max(6,w*G.light),h,8); ctx.fill();
+  ctx.fillStyle='#ffe9b0'; ctx.font='800 10px Inter,sans-serif'; ctx.fillText('KINGDOM OF GOD', x, y+h+12);
+  ctx.fillStyle='#7c8098'; ctx.textAlign='right'; ctx.fillText('the darkness', x+w, y+h+12); ctx.textAlign='left';
+  var A=actOf(sceneIdx), lt=A.end-A.start+1, ln=sceneIdx-A.start+1;
+  ctx.fillStyle='#eaf0ff'; ctx.font='800 13px Inter,sans-serif'; ctx.textAlign='right'; ctx.fillText('✝ '+G.souls+' / '+G.total+'   ·   Act '+A.roman+'  '+ln+'/'+lt, W-16, 24); ctx.textAlign='left';
+  // scene title
+  ctx.fillStyle='rgba(220,230,255,0.9)'; ctx.font='700 13px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText(G.title, W*0.5, 20); ctx.textAlign='left';
+  // sun arc
+  var cx=W*0.5, cy=36, rad=22; ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,rad,Math.PI,TAU); ctx.stroke();
+  var sa=Math.PI+G.sun*Math.PI, sx=cx+Math.cos(sa)*rad, sy=cy+Math.sin(sa)*rad; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=G.evening?'rgba(200,210,255,0.9)':'rgba(255,230,150,0.95)'; ctx.beginPath(); ctx.arc(sx,sy,6,0,TAU); ctx.fill(); ctx.restore();
+  drawRoster();
+}
+function drawRoster(){                                       // TV-mode couch roster: one coloured chip per player
+  var ps=activePlayers(); if(!TV && ps.length<2) return;
+  var node=(!G.praying)&&nearNode();
+  var own=node?(node.type==='person'?'Hugger':((node.type==='depot'||node.type==='truck')?'Loader':(node.type==='station'?'Watchman':null))):null;
+  var ch=28, capClear=Math.max(0,(95-offY)/scale), yy=H-38-capClear;     // letterboxed → bottom; exact 16:9 → rise to clear the KJV caption
+  var n=ps.length, cw=138, gap=9, tot=n*cw+(n-1)*gap, bsx=clamp((W-tot)/2,10,W-tot-10);
+  for(var i=0;i<n;i++){ var p=ps[i], bx=bsx+i*(cw+gap); ctx.save();
+    ctx.fillStyle='rgba(8,12,22,0.78)'; rr(bx,yy,cw,ch,8); ctx.fill();
+    var pulse=(p.seat===own)||(p.seat==='Driver' && (Math.abs(car.vx)+Math.abs(car.vy))>30);
+    if(pulse){ ctx.strokeStyle=p.col.hue; ctx.lineWidth=2.4; ctx.globalAlpha=0.55+0.4*Math.sin(t*6); rr(bx+1,yy+1,cw-2,ch-2,7); ctx.stroke(); ctx.globalAlpha=1; }
+    ctx.fillStyle=p.col.hue; ctx.beginPath(); ctx.arc(bx+15,yy+14,7.5,0,TAU); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle='#eef3ff'; ctx.font='800 12px Inter,sans-serif'; ctx.fillText(p.seat, bx+29, yy+10);
+    ctx.fillStyle='#9fb2d8'; ctx.font='700 10px Inter,sans-serif'; ctx.fillText((p.pad!=null?('P'+(p.idx+1)):((p.touch&&p.kb)?'You':(p.kb?'Keys':'Touch')))+'  ✝'+p.reached, bx+29, yy+21);
+    ctx.restore();
+  }
+  if(TV && n<MAXP){ ctx.save(); ctx.globalAlpha=0.5+0.25*Math.sin(t*3); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText('press Ⓐ on a controller to join', W*0.5, yy-8); ctx.restore(); ctx.textAlign='left'; }
+  ctx.textBaseline='alphabetic';
+}
+function drawPrayer(){
+  ctx.fillStyle='rgba(6,10,22,0.55)'; ctx.fillRect(0,0,W,H);
+  var cx=W*0.5, cy=H*0.52, br=40+Math.sin(t*1.1)*18+G.prayT*30;
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(190,215,255,0.8)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,br,0,TAU); ctx.stroke(); ctx.fillStyle=rgrad(cx,cy,2,br,[[0,'rgba(190,215,255,0.25)'],[1,'rgba(190,215,255,0)']]); ctx.beginPath(); ctx.arc(cx,cy,br,0,TAU); ctx.fill(); ctx.restore();
+  ctx.fillStyle='#cfe0ff'; ctx.font='italic 700 15px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText(G.prayLabel||'Breathe, and pray like Daniel…', cx, cy+br+28);
+  ctx.fillStyle='#8fb0e8'; ctx.font='700 12px Inter,sans-serif'; ctx.fillText((padSeen?'hold Ⓐ':(isTouch?'hold ✦':'hold Space'))+' to pray  ·  '+Math.round(G.prayT*100)+'%', cx, cy+br+48); ctx.textAlign='left';
+}
+function render(dt){
+  ctx.clearRect(-offX/scale,-offY/scale,W+Math.abs(offX)/scale*2,H+Math.abs(offY)/scale*2);
+  ctx.fillStyle='#05080f'; ctx.fillRect(0,0,W,H);
+  if(shake>0){ ctx.save(); ctx.translate(rand(-shake,shake),rand(-shake,shake)); shake=Math.max(0,shake-dt*30); }
+  drawGround(); drawRoads(); drawProps(); drawRibbon(); drawGate(); drawLions();
+  for(var i=0;i<G.traps.length;i++) drawTrap(G.traps[i]);
+  drawDepot(); drawTruckDepot(); if(G.signpost) drawSignpost();
+  for(var s=0;s<G.stations.length;s++) drawStation(G.stations[s]);
+  for(var i=0;i<G.people.length;i++) drawPerson(G.people[i]);
+  drawCompanion(); drawParts(); drawVehicle();
+  if(shake>0) ctx.restore();
+  drawHUD();
+  var node=!G.praying && nearNode();
+  if(node){ var txt=node.type==='depot'?'Load Bibles':node.type==='truck'?'Bring the big truck':node.type==='station'?'Stop and pray':(G.cargo>0?'Give a Bible & a hug':'(no Bibles — go to the depot)'); promptBtn(txt); }
+  if(G.praying) drawPrayer();
+  if(!G.started && t2<7 && !G.praying){ smallHint(padSeen?'Stick to drive · Ⓐ to act':(isTouch?'Arrows to drive · ✦ to act':'Arrows / WASD to drive · Space to act')); }
+}
+var t2=0;
+function promptBtn(txt){ ctx.save(); ctx.globalAlpha=0.7+0.3*Math.sin(t*5); ctx.fillStyle='#fff'; ctx.font='800 '+(TV?18:15)+'px Inter,sans-serif'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=8; ctx.fillText((padSeen?'Ⓐ  ':(isTouch?'✦  ':'[Space]  '))+txt, car.x, car.y+36); ctx.restore(); ctx.textAlign='left'; }
+function smallHint(txt){ ctx.save(); ctx.globalAlpha=0.8; ctx.fillStyle='#dfe8ff'; ctx.font='700 14px Inter,sans-serif'; ctx.textAlign='center'; ctx.fillText(txt,W*0.5,H*0.52); ctx.restore(); ctx.textAlign='left'; }
+
+/* ============================================================================
+   FLOW
+   ============================================================================ */
+var scrEl=document.getElementById('screen'), scrTitle=document.getElementById('scrTitle'), scrText=document.getElementById('scrText'), scrBtn=document.getElementById('scrBtn'), scrHint=document.getElementById('scrHint');
+var mode='title';
+function showTitle(){ mode='title'; PROG.souls=0; scrTitle.innerHTML='Racing for Jesus<small>Acts I–II · The Great Commission Road</small>';
+  scrText.innerHTML="You are sent, like the disciples, to carry the Word to the world. <b>Load Bibles</b>, drive to each house, and <b>give a Bible &amp; a hug</b> — the right Word of God rises. Watch the grey land <b>bloom to gold</b>. Stop to <b>pray like Daniel</b>, <b>plead the Blood of Jesus</b> past the gloom, bring the <b>Gospel Truck</b> when there is much to carry — and walk <b>Abraham’s road</b> and <b>Joseph’s Egypt</b>, where even the betrayed are forgiven.<br><br><b>1–8 players, together</b> — one shared vehicle, every child a seat. The little ones are never stuck; the helpers fill in.";
+  scrBtn.textContent='▶ Go ye'; scrHint.textContent='1–8 players · controller, keyboard or touch · press Ⓐ / Space to join &amp; play'; scrEl.classList.add('on'); }
+function startScene(i){ if(humanCount()===0) ensureLocalPlayer(); scrEl.classList.remove('on'); buildScene(i); t2=0;
+  caption('word', G.cfg.open.text, G.cfg.open.ref);
+  setTimeout(function(){ if(!G.done) caption('narr', G.intro); },4200);
+  setTimeout(function(){ if(G.done) return; G.started=true;      // reliable latch — the AI net depends on it, so set it regardless of early deliveries
+    if(G.souls===0){ caption(); if(G.gate && G.mandatoryHint){ caption('narr', G.mandatoryHint); setTimeout(function(){ if(!G.done) caption(); },3400); } } },9000); }
+function winScene(){ if(G.done) return; G.done=true; sfx.win(); caption();
+  for(var q=0;q<40;q++) addPart({x:rand(0,W),y:rand(0,H),vy:rand(-120,-20),vx:rand(-60,60),grav:120,life:1.8,col:(q%2?'rgba(242,201,76,0.9)':'rgba(255,255,255,0.9)'),r:rand(2,4)});
+  if(G.cfg.forgive) caption('narr','And Joseph forgave his brethren, and kissed them — God turned it all to good.');
+  var wv=G.cfg.winRef, A=actOf(sceneIdx), lt=A.end-A.start+1, ln=sceneIdx-A.start+1;
+  var isGameLast=(sceneIdx>=SCENES.length-1), isActLast=(sceneIdx===A.end);
+  setTimeout(function(){
+    if(isGameLast){ mode='actdone'; scrTitle.innerHTML='All Nations Fed<small>Act II complete</small>';
+      scrText.innerHTML="Bread for all the world, and the brothers forgiven — "+PROG.souls+" souls reached across twenty scenes, the whole land turned to colour. <b>\""+wv.text+"\" ("+wv.ref+")</b><br><br><i>Act III — Jabez’s Widening Fields &amp; the Harvest — is being built next.</i>";
+      scrBtn.textContent='▶ Play from the start'; scrHint.textContent='More of the road is coming';
+    } else if(isActLast){ mode='actcont'; var nA=actOf(sceneIdx+1);
+      scrTitle.innerHTML='Act '+A.roman+' complete<small>'+A.name+'</small>';
+      scrText.innerHTML="<b>\""+wv.text+"\" ("+wv.ref+")</b><br><br>"+PROG.souls+" souls reached so far — the journey goes on. <i>Next: Act "+nA.roman+" — "+nA.name+"</i>";
+      scrBtn.textContent='▶ Begin Act '+nA.roman; scrHint.textContent='Scene '+(sceneIdx+2)+' of '+SCENES.length;
+    } else { mode='next'; scrTitle.innerHTML=G.title+'<small>Scene '+ln+' of '+lt+' complete</small>';
+      scrText.innerHTML="<b>\""+wv.text+"\" ("+wv.ref+")</b><br><br>"+PROG.souls+" souls reached so far. <i>Next: "+SCENES[sceneIdx+1].title+"</i>";
+      scrBtn.textContent='▶ Continue'; scrHint.textContent='Act '+A.roman+' · scene '+(ln+1)+' of '+lt;
+    }
+    scrEl.classList.add('on');
+  }, 2100);
+}
+scrBtn.addEventListener('click',function(){ actx();
+  if(mode==='title') startScene(0);
+  else if(mode==='next') startScene(sceneIdx+1);
+  else if(mode==='actcont') startScene(sceneIdx+1);
+  else if(mode==='actdone') { showTitle(); }
+});
+addEventListener('keydown',function(e){ if(scrEl.classList.contains('on') && ['Enter','NumpadEnter','Space','KeyF'].indexOf(e.code)>=0){ e.preventDefault(); scrBtn.click(); } });
+
+/* ---------- main loop ---------- */
+function pollMenu(){ pollJoins();                               // controllers can join AND drive the menus
+  var gs=readPads();
+  for(var i=0;i<gs.length;i++){ var gp=gs[i]; if(!gp) continue; if(!claimedPad(i)) continue;
+    var e0=padEdge('m'+i,gp,0), e9=padEdge('m'+i,gp,9); if(e0||e9){ scrBtn.click(); break; } }
+}
+buildScene(0); showTitle();
+var last=performance.now();
+function loop(now){ var dt=Math.min(0.05,(now-last)/1000); last=now; t+=dt; t2+=dt;
+  updateParts(dt);
+  if(scrEl.classList.contains('on')){ pollMenu(); render(dt); requestAnimationFrame(loop); return; }
+  if(!G.done) update(dt); else readTeam();
+  render(dt); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# tooling / scratch
+.DS_Store
+Thumbs.db
+*.log
+_syntax_check.js
+.claude/
