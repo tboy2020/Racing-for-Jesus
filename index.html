@@ -296,20 +296,21 @@ function bodyInit(b,role,x,y){ b.role=role; b.x=x; b.y=y; b.vx=0; b.vy=0; b.stat
 function buildScene(i){
   sceneIdx=i; var s=SCENES[i];
   var n=s.people.length;
-  var startX=720, gap=clamp(1100/Math.max(1,n), 150, 240);
-  var people=s.people.map(function(feel,k){ return { feel:feel, x:startX+k*gap, y:(k%2?LANE-36:LANE+6), reached:false, hugged:false, worded:false, bloom:0, bob:rand(0,TAU) }; });
-  var worldEnd=startX+(n-1)*gap+320;
+  var cols=Math.min(4,Math.max(2,Math.round(Math.sqrt(n))));                 // houses in a NEIGHBOURHOOD cluster (walk to them on foot)
+  var people=s.people.map(function(feel,k){ var c=k%cols, r=Math.floor(k/cols); return { feel:feel, x:745+c*150+(r%2?70:0)+rand(-8,8), y:322+r*64+rand(-6,6), reached:false, hugged:false, worded:false, bloom:0, bob:rand(0,TAU) }; });
+  var maxpx=760; people.forEach(function(p){ if(p.x>maxpx)maxpx=p.x; });
+  var worldEnd=maxpx+180, parkX=690;                                          // truck parks at the edge of the neighbourhood
   var cratesTarget=clamp(Math.ceil(n/2),3,6);
   G={ cfg:s, title:s.title, sub:s.sub, intro:s.intro,
-    phase:'load', people:people, total:n, worldEnd:worldEnd,
+    phase:'load', people:people, total:n, worldEnd:worldEnd, parkX:parkX,
     cratesTarget:cratesTarget, loaded:0, cargo:0, crates:[], golden:null, coLift:null,
     souls:0, light:0.1, done:false, started:false, idle:0,
     dim:!!s.dim, desert:!!s.desert, finale:!!s.finale, forgive:!!s.forgive,
     pray:!!s.pray, prayDone:false, praying:false, prayT:0, prayMin:0, seek:!!s.seek,
-    prayX:(s.pray? startX-120 : 0), prayGateOpen:!s.pray,
+    prayX:(s.pray? 590 : 0), prayGateOpen:!s.pray,
     snares: s.snares? [] : null,
     msg:'', msgT:0 };
-  if(s.snares){ for(var q=0;q<3;q++) G.snares.push({ x:startX+120+q*260, y:LANE+(q%2?-30:20), r:40, armed:true, warnT:0, shieldT:0 }); }
+  if(s.snares){ for(var q=0;q<2;q++) G.snares.push({ x:505+q*78, y:LANE+(q%2?-12:12), r:40, armed:true, warnT:0, shieldT:0 }); }
   bodyInit(strong,'strong',260,370); bodyInit(light,'light',200,418);
   camX=0; camTarget=0; capToken++;
 }
@@ -326,7 +327,7 @@ function matCrate(){ for(var i=0;i<G.crates.length;i++){ if(!G.crates[i].held &&
 function bodyAct(b, env){            // env = {dx,dy,act,actEdge} from a player OR the AI
   var sp=168, ax=env.dx*sp, ay=env.dy*sp*0.72;
   b.vx=lerp(b.vx,ax,0.35); b.vy=lerp(b.vy,ay,0.35);
-  b.x=clamp(b.x+b.vx*(1/60),60,900); b.y=clamp(b.y+b.vy*(1/60),344,452);
+  var xmax=(G.phase==='foot')?G.worldEnd:900, ymin=(G.phase==='foot')?302:344; b.x=clamp(b.x+b.vx*(1/60),50,xmax); b.y=clamp(b.y+b.vy*(1/60),ymin,456);
   var moving=Math.abs(b.vx)+Math.abs(b.vy)>12; if(Math.abs(b.vx)>8) b.facing=b.vx>0?1:-1;
   b.anim+=(moving?6:2)*(1/60);
   b.state= b.holding?'carry':(moving?'walk':'idle');
@@ -376,10 +377,13 @@ function finishCoLift(){ G.golden=null; G.cargo=G.total; strong.holding=false; l
   for(var q=0;q<30;q++) addPart({x:DEPOT.truck.x-14,y:LLy(DEPOT.truck.y)-34,vx:rand(-90,90),vy:rand(-180,-40),grav:200,life:1.3,col:(q%2?'rgba(255,220,140,0.95)':'rgba(255,255,255,0.9)'),r:rand(2,4)});
   G.msg='TRUCK FULL!'; G.msgT=1.6;
   captionTimed('narr','The truck is full — now ride out and carry the Word!',null,3200);
-  setTimeout(function(){ if(!G.done) toRide(); },1400);
+  setTimeout(function(){ if(!G.done) toDrive(); },1400);
 }
-function toRide(){ G.phase='ride'; strong.x=DEPOT.truck.x; strong.y=DEPOT.truck.y; light.x=DEPOT.truck.x; light.y=DEPOT.truck.y;
-  truck.x=DEPOT.truck.x; truck.y=LANE; truck.vx=0; truck.vy=0; truck.ang=0; }
+function toDrive(){ G.phase='drive'; truck.x=DEPOT.truck.x; truck.y=LANE; truck.vx=0; truck.vy=0; truck.ang=0; truck.face=1;
+  strong.x=truck.x; strong.y=LANE; light.x=truck.x; light.y=LANE; }
+function toFoot(){ if(G.phase==='foot')return; G.phase='foot'; truck.x=clamp(truck.x,60,G.parkX); truck.vx=0; truck.vy=0;
+  bodyInit(strong,'strong',truck.x-38,LANE+16); bodyInit(light,'light',truck.x-14,LANE+30);
+  captionTimed('narr','Come down and give each one a hug and a Bible — one of you take one, the other take another!',null,3800); }
 var truck={x:470,y:LANE,vx:0,vy:0,ang:0};
 function LLy(worldY){ return worldY; }   // (ground y already in screen space for our shallow tilt)
 var PROG={souls:0};
@@ -396,10 +400,11 @@ function aiPlan(role,phase){ var b=role==='strong'?strong:light;
     if(role==='light'){ var need=(G.loaded+G.crates.length)<G.cratesTarget; if(need && G.crates.length<3) return toward(b,DEPOT.shelf.x,DEPOT.shelf.y+18, nearShelf(b)); return idleNear(b,DEPOT.shelf.x+34,DEPOT.shelf.y+34); }
     if(b.holding) return toward(b,DEPOT.truck.x-14,DEPOT.truck.y, nearTruckBed(b)); var c=matCrate(); if(c) return toward(b,c.x,c.y, dist(b.x,b.y,c.x,c.y)<58); return idleNear(b,DEPOT.mat.x+40,DEPOT.mat.y);
   }
-  // ride — DRIVER (strong) drives + greets; PICKER (light) hands out the Bible
-  if(role==='strong'){ if(G.pray && !G.prayDone){ var near=Math.abs(truck.x-G.prayX)<40; return driveToward(G.prayX,LANE, near); }
-    var p=nearestUndelivered(null); if(p) return driveToward(p.x,p.y, dist(truck.x,truck.y,p.x,p.y)<60 && !p.hugged); return ZERO; }
-  var ph=nearestUndelivered(null); if(ph) return {dx:0,dy:0,act:(dist(truck.x,truck.y,ph.x,ph.y)<66 && G.cargo>0 && !ph.worded),actEdge:false}; return ZERO;
+  // drive — DRIVER (strong) drives to the neighbourhood; PICKER just rides along
+  if(phase==='drive'){ if(role==='strong'){ if(G.pray && !G.prayDone) return driveToward(G.prayX,LANE, Math.abs(truck.x-G.prayX)<40); return driveToward(G.parkX,LANE,false); } return ZERO; }
+  // foot — walk to the nearest person and deliver (hug + Bible)
+  if(phase==='foot'){ var fp=nearestPersonTo(b,1e9); if(fp) return toward(b,fp.x,fp.y, dist(b.x,b.y,fp.x,fp.y)<44 && G.cargo>0); return ZERO; }
+  return ZERO;
 }
 function driveToward(tx,ty,atAct){ var dx=tx-truck.x,dy=ty-truck.y,d=Math.hypot(dx,dy)||1; var e=d<70?Math.max(0.35,d/120):1; return {dx:dx/d*e,dy:dy/d*e,act:!!atAct,actEdge:false}; }
 function roleInput(role){ var dx=0,dy=0,act=false,actEdge=false,any=false;
@@ -443,21 +448,29 @@ function driveTruck(env,dt){ var acc=640; truck.vx+=env.dx*acc*dt; truck.vy+=env
   if(truck.x>=maxX) truck.vx=Math.min(0,truck.vx);
   if(Math.abs(truck.vx)>6) truck.face=truck.vx>0?1:-1;
 }
-function stepRide(dt){ strong.aiCd=Math.max(0,(strong.aiCd||0)-dt); light.aiCd=Math.max(0,(light.aiCd||0)-dt);
-  var S=roleEnv('strong','ride'); driveTruck(S.env,dt);
-  if(G.pray && !G.prayDone && Math.abs(truck.x-G.prayX)<42){ if(anyActEdge()||G.idle>2.0) startPraying(); }
-  var pers=nearPerson();
-  if(pers){ var L=roleEnv('light','ride');
-    var sAct=S.byAI?(S.env.act&&strong.aiCd<=0):S.env.actEdge;
-    var lAct=L.byAI?(L.env.act&&light.aiCd<=0):L.env.actEdge;
-    if(sAct && !pers.hugged){ hugPerson(pers); strong.aiCd=0.5; strong.state='deliver'; strong.animT=0.5; }        // DRIVER greets
-    if(lAct && G.cargo>0 && !pers.worded){ handBible(pers); light.aiCd=0.5; light.state='deliver'; light.animT=0.5; } // PICKER hands the Bible
-  }
+function nearestPersonTo(b,rad){ var best=null,bd=rad; for(var i=0;i<G.people.length;i++){ var p=G.people[i]; if(p.reached)continue; var d=dist(b.x,b.y,p.x,p.y); if(d<bd){bd=d;best=p;} } return best; }
+function footDeliver(b,p){ p.reached=true; p.hugged=true; p.worded=true; p.bloom=0.001; G.cargo=Math.max(0,G.cargo-1); G.souls++; PROG.souls++; G.light=clamp(G.light+1/G.total,0,1);
+  b.state='deliver'; b.animT=0.6; var v=VERSES[p.feel]||VERSES.sad; caption('word',v.text,v.ref); sfx.bless(); sfx.hug();
+  for(var q=0;q<20;q++) addPart({x:p.x,y:p.y-10,vx:rand(-70,70),vy:rand(-150,-30),grav:260,life:1.2,col:(q%2?'rgba(255,220,140,0.9)':'rgba(255,255,255,0.9)'),r:rand(2,4)});
+  if(G.souls>=G.total){ G.msg='ALL REACHED!'; G.msgT=1.5; setTimeout(winScene,1400); } }
+/* PHASE B — DRIVE to the neighbourhood (one child drives, the other rides) */
+function stepDrive(dt){ strong.aiCd=Math.max(0,(strong.aiCd||0)-dt); light.aiCd=Math.max(0,(light.aiCd||0)-dt);
+  var S=roleEnv('strong','drive'); driveTruck(S.env,dt);
+  if(G.pray && !G.prayDone && Math.abs(truck.x-G.prayX)<42){ if(anyActEdge()||G.idle>2.5) startPraying(); }
   if(G.snares) updateSnares(dt);
   strong.x=truck.x-9; strong.y=truck.y-3; light.x=truck.x+11; light.y=truck.y-7;
-  if(strong.animT>0) strong.animT-=dt; else strong.state='ride';
-  if(light.animT>0) light.animT-=dt; else light.state='ride';
-  camTarget=clamp(truck.x-360,0,Math.max(0,G.worldEnd-W)); camX=lerp(camX,camTarget,0.09);
+  strong.state='ride'; light.state='ride';
+  camTarget=clamp(truck.x-W*0.42,0,Math.max(0,G.worldEnd-W)); camX=lerp(camX,camTarget,0.09);
+  if(truck.x>=G.parkX-4 && (!G.pray||G.prayDone)) toFoot();
+}
+/* PHASE C — ON FOOT: come down from the truck and run to each person to hug + give a Bible */
+function footTurn(b,R){ if(b.animT>0)b.animT-=1/60; var p=nearestPersonTo(b,52); if(!p) return;
+  var act=R.byAI?(R.env.act&&b.aiCd<=0):R.env.actEdge;
+  if(act && G.cargo>0 && !p.reached){ footDeliver(b,p); b.aiCd=0.6; } }
+function stepFoot(dt){ strong.aiCd=Math.max(0,(strong.aiCd||0)-dt); light.aiCd=Math.max(0,(light.aiCd||0)-dt);
+  var S=roleEnv('strong','foot'); bodyAct(strong,S.env); footTurn(strong,S);
+  var L=roleEnv('light','foot'); bodyAct(light,L.env); footTurn(light,L);
+  var mid=(strong.x+light.x)/2; camTarget=clamp(mid-W/2,0,Math.max(0,G.worldEnd-W)); camX=lerp(camX,camTarget,0.08);
 }
 function updateSnares(dt){ for(var i=0;i<G.snares.length;i++){ var tr=G.snares[i]; if(tr.shieldT>0)tr.shieldT-=dt; if(!tr.armed)continue;
   var d=dist(truck.x,truck.y,tr.x,tr.y);
@@ -488,7 +501,7 @@ function update(dt){ pollJoins();
   var eng=false; for(i=0;i<players.length;i++){ var p=players[i]; if(p.inactive)continue; var r=p._read; if(r && (Math.hypot(r.dx,r.dy)>0.08||r.act)) eng=true; }
   G.idle = eng?0:(G.idle+dt);
   if(G.praying){ stepPraying(dt); afterUpdate(dt); return; }
-  if(G.phase==='load') stepLoad(dt); else if(G.phase==='ride') stepRide(dt);
+  if(G.phase==='load') stepLoad(dt); else if(G.phase==='drive') stepDrive(dt); else if(G.phase==='foot') stepFoot(dt);
   afterUpdate(dt);
 }
 /* ============================================================================
@@ -519,13 +532,19 @@ function drawCrate(c){ var sx=SX(c.x), sy=c.y-(c.z||0); if(c.held) return; ctx.s
 function drawGolden(g){ var sx=SX(g.x), sy=g.y-(g.z||0); ctx.save(); ctx.translate(sx,sy); ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0,4,28,7,0,0,TAU); ctx.fill();
   ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.4+0.2*Math.sin(t*4); ctx.fillStyle=rgrad(0,-8,4,52,[[0,'rgba(255,225,140,0.6)'],[1,'rgba(255,225,140,0)']]); ctx.beginPath(); ctx.arc(0,-8,52,0,TAU); ctx.fill(); ctx.restore();
   panel(-26,-28,52,32,5,'#e0b24a',0.5); ctx.fillStyle='#fff6cf'; ctx.fillRect(-3,-26,6,28); ctx.fillRect(-13,-15,26,7); ctx.restore(); }
-function drawCargo(bx,by,fill){ var cols=4, bw=17,bh=11,gap=2, n=Math.min(fill,20); for(var i=0;i<n;i++){ var row=Math.floor(i/cols), col=i%cols; var x=bx+col*(bw+gap)+(row%2?6:0), y=by+42-row*(bh+1); ctx.fillStyle='#243a66'; fillrr(x,y,bw,bh,2); ctx.fillStyle=shade('#243a66',0.25); ctx.fillRect(x,y,bw,3); ctx.fillStyle='#e8d48a'; ctx.fillRect(x+2,y+bh-3,bw-4,2); ctx.fillStyle='#f2c94c'; ctx.fillRect(x+bw/2-0.8,y+2,1.6,bh-5); ctx.fillRect(x+bw/2-3,y+bh/2-1,6,1.6); } }
+function drawCargo(bx,by,fill){ var perRow=4, bw=17,bh=10, gx=2, gy=2, n=Math.min(fill,20);
+  for(var i=0;i<n;i++){ var row=Math.floor(i/perRow), col=i%perRow, rowN=Math.min(perRow,n-row*perRow);
+    var x=bx+(perRow*bw+(perRow-1)*gx-(rowN*bw+(rowN-1)*gx))/2 + col*(bw+gx), y=by+46-row*(bh+gy);  // each row centred, stacks up
+    ctx.fillStyle='#243a66'; fillrr(x,y,bw,bh,2); ctx.fillStyle=shade('#243a66',0.3); ctx.fillRect(x,y,bw,3);
+    ctx.fillStyle='#e8d48a'; ctx.fillRect(x+1.5,y+bh-2.5,bw-3,2);
+    ctx.fillStyle='#f2c94c'; ctx.fillRect(x+bw/2-0.7,y+2,1.4,bh-4); ctx.fillRect(x+bw/2-2.5,y+bh/2-0.7,5,1.4); } }
 function drawTruckAt(wx,wy,face,dip,fill){ var sx=SX(wx), sy=wy-(dip||0)*4; var g=G.light; ctx.save(); ctx.translate(sx,sy); ctx.scale(face||1,1);
   ctx.fillStyle='rgba(0,0,0,0.26)'; ctx.beginPath(); ctx.ellipse(-6,30,98,15,0,0,TAU); ctx.fill();
   function wheel(wxx){ ctx.fillStyle='#1b1f27'; ctx.beginPath(); ctx.arc(wxx,27,17,0,TAU); ctx.fill(); ctx.fillStyle='#39414f'; ctx.beginPath(); ctx.arc(wxx,27,8,0,TAU); ctx.fill(); ctx.fillStyle='#cfd8e6'; ctx.beginPath(); ctx.arc(wxx-2,25,2.3,0,TAU); ctx.fill(); }
   wheel(-58); wheel(46);
   var bed=mixHex('#355b86','#4f86c6',g*0.4); panel(-94,-36,96,58,8,bed,0);
-  ctx.save(); rr(-90,-32,88,48,5); ctx.clip(); ctx.fillStyle=shade(bed,-0.3); ctx.fillRect(-90,-32,88,48); drawCargo(-88,-30,fill); ctx.restore();
+  ctx.save(); rr(-90,-32,88,48,5); ctx.clip(); ctx.fillStyle=shade(bed,-0.3); ctx.fillRect(-90,-32,88,48); ctx.restore();
+  ctx.save(); rr(-90,-66,88,82,5); ctx.clip(); drawCargo(-88,-30,fill); ctx.restore();   // books rise neatly above the bed rim
   ctx.fillStyle=shade(bed,-0.12); fillrr(-94,8,96,15,6);
   var cab=mixHex('#b23a34','#e6513f',g*0.3); panel(2,-30,56,52,9,cab,0);
   ctx.fillStyle=mixHex('#9fc4d6','#cfeaff',g); fillrr(10,-24,30,22,5); ctx.save(); ctx.globalAlpha=0.5; ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(14,-22); ctx.lineTo(32,-2); ctx.stroke(); ctx.restore();
@@ -586,8 +605,8 @@ function drawContextPrompt(){ if(G.praying||G.done)return;
   if(G.phase==='load'){ if(G.golden){ prompt3('Carry the golden case TOGETHER!',SX(G.golden.x),G.golden.y-48); return; }
     if(strong.holding) prompt3('Take it to the truck',SX(strong.x),strong.y-60); else if(matCrate()) prompt3('Pick up the crate',SX(strong.x),strong.y-60);
     if((G.loaded+G.crates.length)<G.cratesTarget){ if(nearShelf(light)) prompt3('Reach up for a Bible',SX(light.x),light.y-60); else prompt3('PICKER: reach the shelf ↑',SX(DEPOT.shelf.x),DEPOT.shelf.y-98); } }
-  else { var pers=nearPerson(); if(pers){ prompt3(G.cargo<=0?'(load more Bibles first)':'Give the Bible TOGETHER!',SX(pers.x),pers.y-80); }
-    else if(G.pray&&!G.prayDone&&Math.abs(truck.x-G.prayX)<48){ prompt3('Stop and pray',SX(G.prayX),LANE-82); } }
+  else if(G.phase==='drive'){ if(G.pray&&!G.prayDone&&Math.abs(truck.x-G.prayX)<48) prompt3('Stop and pray',SX(G.prayX),LANE-82); else prompt3('Drive to the houses  →',SX(truck.x),truck.y-46); }
+  else { var ps=nearestPersonTo(strong,54); if(ps) prompt3('Hug & give a Bible',SX(strong.x),strong.y-62); var pl=nearestPersonTo(light,54); if(pl&&pl!==ps) prompt3('Hug & give a Bible',SX(light.x),light.y-62); }
 }
 function drawBigMsg(){ ctx.save(); var k=clamp(G.msgT/1.6,0,1); ctx.globalAlpha=Math.min(1,k*2.2); ctx.fillStyle='#f6d98a'; ctx.font='800 '+Math.round(42+(1-k)*8)+'px Cinzel,serif'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=14; ctx.fillText(G.msg,W/2,H*0.38); ctx.restore(); ctx.textAlign='left'; }
 function drawPrayerOverlay(){ ctx.fillStyle='rgba(6,10,22,0.5)'; ctx.fillRect(0,0,W,H); var cx=W/2,cy=H*0.5, br=40+Math.sin(t*1.1)*16+G.prayT*30; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(190,215,255,0.8)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,br,0,TAU); ctx.stroke(); ctx.fillStyle=rgrad(cx,cy,2,br,[[0,'rgba(190,215,255,0.22)'],[1,'rgba(190,215,255,0)']]); ctx.beginPath(); ctx.arc(cx,cy,br,0,TAU); ctx.fill(); ctx.restore(); ctx.fillStyle='#8fb0e8'; ctx.font='700 12px Inter'; ctx.textAlign='center'; ctx.fillText((padSeen?'hold Ⓐ':(isTouch?'hold ✦':'hold Space'))+' to pray  ·  '+Math.round(G.prayT*100)+'%',cx,cy+br+28); ctx.textAlign='left'; }
@@ -600,7 +619,11 @@ function render(dt){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,c
   if(shake>0){ ctx.save(); ctx.translate(rand(-shake,shake),rand(-shake,shake)); shake=Math.max(0,shake-dt*30); }
   var list=[]; function add(y,f){ list.push({y:y,f:f}); }
   if(G.phase==='load'){ add(DEPOT.shelf.y,drawShelf); add(DEPOT.mat.y-3,drawMat); for(var i=0;i<G.crates.length;i++){ (function(c){ add(DEPOT.mat.y, function(){drawCrate(c);}); })(G.crates[i]); } add(DEPOT.truck.y,function(){ drawTruckAt(DEPOT.truck.x,DEPOT.truck.y,-1,truckDip,G.cargo); }); if(G.golden)(function(g){ add(g.y,function(){drawGolden(g);}); })(G.golden); add(strong.y,function(){drawPlayer(strong);}); add(light.y,function(){drawPlayer(light);}); }
-  else { for(var j=0;j<G.people.length;j++){ (function(p){ add(p.y,function(){drawPerson(p);}); })(G.people[j]); } if(G.snares){ for(var s=0;s<G.snares.length;s++){ (function(tr){ add(tr.y-1,function(){drawSnare(tr);}); })(G.snares[s]); } } if(G.pray&&!G.prayDone) add(LANE-2,drawPrayStation); add(truck.y+1,function(){ drawTruckAt(truck.x,truck.y,truck.face||1,truckDip,G.cargo); drawRiders(); }); }
+  else { for(var j=0;j<G.people.length;j++){ (function(p){ add(p.y,function(){drawPerson(p);}); })(G.people[j]); }
+    if(G.snares){ for(var s=0;s<G.snares.length;s++){ (function(tr){ add(tr.y-1,function(){drawSnare(tr);}); })(G.snares[s]); } }
+    if(G.pray&&!G.prayDone) add(LANE-2,drawPrayStation);
+    if(G.phase==='foot'){ add(truck.y+1,function(){ drawTruckAt(truck.x,truck.y,1,truckDip,G.cargo); }); add(strong.y+0.1,function(){drawPlayer(strong);}); add(light.y,function(){drawPlayer(light);}); }
+    else { add(truck.y+1,function(){ drawTruckAt(truck.x,truck.y,truck.face||1,truckDip,G.cargo); drawRiders(); }); } }
   list.sort(function(a,b){return a.y-b.y;}); for(var k=0;k<list.length;k++) list[k].f();
   drawParts(); if(shake>0) ctx.restore();
   drawGodRays(); drawVignette(); drawHUD(); drawContextPrompt(); if(G.praying) drawPrayerOverlay(); if(G.msgT>0) drawBigMsg(); drawRoster(); }
@@ -609,7 +632,7 @@ function render(dt){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,c
    FLOW
    ============================================================================ */
 var scrEl=document.getElementById('screen'), scrTitle=document.getElementById('scrTitle'), scrText=document.getElementById('scrText'), scrBtn=document.getElementById('scrBtn'), scrHint=document.getElementById('scrHint');
-var mode='title';
+var mode='title', autoNextTimer=null;
 function showTitle(){ mode='title'; PROG.souls=0; scrTitle.innerHTML='Racing for Jesus<small>The Gospel Truck · Acts I–II</small>';
   scrText.innerHTML="<b>Best with two players.</b> One child <b>DRIVES</b> the truck, the other <b>PICKS the Bibles</b>. Load the Gospel Truck together, drive to each house, and <b>hand out the Bible together</b> — you do it all yourselves, nothing is automatic. Watch the grey land <b>bloom to gold</b>.<br><br><i>Two controllers = DRIVER + PICKER. Playing solo? A helper fills the empty seat so one child can still play.</i>";
   scrBtn.textContent='▶ Go ye'; scrHint.textContent='2 controllers (one drives, one picks) · or keyboard / touch to play solo'; scrEl.classList.add('on'); }
@@ -621,8 +644,10 @@ function winScene(){ if(G.done)return; G.done=true; sfx.win(); caption(); G.ligh
   setTimeout(function(){ if(isGameLast){ mode='actdone'; scrTitle.innerHTML='All Nations Fed<small>Act II complete</small>'; scrText.innerHTML='Bread for all the world, and the brothers forgiven — <b>'+PROG.souls+'</b> souls reached, the whole land turned to colour.<br><br><b>“'+wv.text+'” ('+wv.ref+')</b><br><br><i>Act III — Jabez’s Widening Fields — is being built next.</i>'; scrBtn.textContent='▶ Play from the start'; scrHint.textContent='More of the road is coming'; }
     else if(isActLast){ mode='actcont'; var nA=actOf(sceneIdx+1); scrTitle.innerHTML='Act '+A.roman+' complete<small>'+A.name+'</small>'; scrText.innerHTML='<b>“'+wv.text+'” ('+wv.ref+')</b><br><br>'+PROG.souls+' souls reached so far. <i>Next: Act '+nA.roman+' — '+nA.name+'</i>'; scrBtn.textContent='▶ Begin Act '+nA.roman; scrHint.textContent='Scene '+(sceneIdx+2)+' of '+SCENES.length; }
     else { mode='next'; scrTitle.innerHTML=G.title+'<small>Scene '+ln+' of '+lt+' complete</small>'; scrText.innerHTML='<b>“'+wv.text+'” ('+wv.ref+')</b><br><br>'+PROG.souls+' souls reached so far. <i>Next: '+SCENES[sceneIdx+1].title+'</i>'; scrBtn.textContent='▶ Continue'; scrHint.textContent='Act '+A.roman+' · scene '+(ln+1)+' of '+lt; }
-    scrEl.classList.add('on'); },2100); }
-scrBtn.addEventListener('click',function(){ actx(); if(mode==='title') startScene(0); else if(mode==='next'||mode==='actcont') startScene(sceneIdx+1); else if(mode==='actdone') showTitle(); });
+    scrEl.classList.add('on');
+    if(mode==='next'||mode==='actcont'){ scrHint.textContent='the next scene starts on its own…'; if(autoNextTimer)clearTimeout(autoNextTimer); autoNextTimer=setTimeout(function(){ autoNextTimer=null; if(scrEl.classList.contains('on')) scrBtn.click(); },5000); }
+  },2100); }
+scrBtn.addEventListener('click',function(){ actx(); if(autoNextTimer){clearTimeout(autoNextTimer);autoNextTimer=null;} if(mode==='title') startScene(0); else if(mode==='next'||mode==='actcont') startScene(sceneIdx+1); else if(mode==='actdone') showTitle(); });
 addEventListener('keydown',function(e){ if(scrEl.classList.contains('on') && ['Enter','NumpadEnter','Space','KeyF'].indexOf(e.code)>=0){ e.preventDefault(); scrBtn.click(); } });
 function pollMenu(){ pollJoins(); var gs=readPads(); for(var i=0;i<gs.length;i++){ var gp=gs[i]; if(!gp||!claimedPad(i)) continue; if(padEdge('m'+i,gp,0)||padEdge('m'+i,gp,9)){ scrBtn.click(); break; } } }
 buildScene(0); showTitle();
