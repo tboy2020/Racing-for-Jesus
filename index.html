@@ -303,7 +303,7 @@ function buildScene(i){
   G={ cfg:s, title:s.title, sub:s.sub, intro:s.intro,
     phase:'load', people:people, total:n, worldEnd:worldEnd,
     cratesTarget:cratesTarget, loaded:0, cargo:0, crates:[], golden:null, coLift:null,
-    souls:0, light:0, done:false, started:false, idle:0,
+    souls:0, light:0.1, done:false, started:false, idle:0,
     dim:!!s.dim, desert:!!s.desert, finale:!!s.finale, forgive:!!s.forgive,
     pray:!!s.pray, prayDone:false, praying:false, prayT:0, prayMin:0, seek:!!s.seek,
     prayX:(s.pray? startX-120 : 0), prayGateOpen:!s.pray,
@@ -534,7 +534,16 @@ function drawTruckAt(wx,wy,face,dip,fill){ var sx=SX(wx), sy=wy-(dip||0)*4; var 
   if(fill>=G.total && G.total>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.3+0.2*Math.sin(t*4); ctx.fillStyle=rgrad(-30,-12,10,116,[[0,'rgba(255,230,150,0.5)'],[1,'rgba(255,230,150,0)']]); ctx.beginPath(); ctx.arc(-30,-12,116,0,TAU); ctx.fill(); ctx.restore(); }
   ctx.restore(); }
 function drawHead(x,y,role){ ctx.save(); ctx.translate(x,y); ctx.fillStyle=mixHex('#e8b98c','#f4cfa0',0.3); ctx.beginPath(); ctx.arc(0,0,8,0,TAU); ctx.fill(); ctx.fillStyle=role==='light'?'#f2d98a':'#5a3a28'; ctx.beginPath(); ctx.arc(0,-3,8,Math.PI,TAU); ctx.fill(); ctx.fillStyle='#2a2e3a'; ctx.beginPath(); ctx.arc(3,0,1.3,0,TAU); ctx.fill(); if(role==='light'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(0,0,2,22,[[0,'rgba(255,236,170,0.7)'],[1,'rgba(255,236,170,0)']]); ctx.beginPath(); ctx.arc(0,0,22,0,TAU); ctx.fill(); ctx.restore(); } ctx.restore(); }
-function drawRiders(){ var sx=SX(truck.x), sy=truck.y, f=truck.face||1; ctx.save(); ctx.translate(sx,sy); drawHead(16*f,-34,'strong'); drawHead(28*f,-38,'light'); ctx.restore(); }
+function drawRider(x,y,role,acting,f){ ctx.save(); ctx.translate(x,y); var col=ROLECOL[role]; var bob=Math.sin(t*4+(role==='light'?1:0))*1.2;
+  panel(-9,-8+bob,18,22,5,col,G.light>0.5?0.45:0);
+  ctx.fillStyle=shade(col,-0.16); if(acting){ fillrr(7*f,-6+bob,16,7,3); } else { fillrr(-11,-5+bob,6,12,3); fillrr(6,-5+bob,6,12,3); }
+  ctx.fillStyle=mixHex('#e8b98c','#f4cfa0',0.3); ctx.beginPath(); ctx.arc(0,-15+bob,9,0,TAU); ctx.fill();
+  ctx.fillStyle=role==='light'?'#f2d98a':'#5a3a28'; ctx.beginPath(); ctx.arc(0,-19+bob,9,Math.PI,TAU); ctx.fill();
+  ctx.fillStyle='#2a2e3a'; ctx.beginPath(); ctx.arc(3*f,-15+bob,1.5,0,TAU); ctx.fill();
+  if(role==='light'){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle=rgrad(11*f,-8+bob,2,30,[[0,'rgba(255,236,170,0.85)'],[1,'rgba(255,236,170,0)']]); ctx.beginPath(); ctx.arc(11*f,-8+bob,30,0,TAU); ctx.fill(); ctx.restore(); ctx.fillStyle='#ffe9a8'; ctx.beginPath(); ctx.arc(11*f,-8+bob,3.5,0,TAU); ctx.fill(); }
+  else { ctx.fillStyle='#9c6b3a'; fillrr(-4,-6+bob,9,7,2); ctx.fillStyle='#f2c94c'; ctx.fillRect(-0.5,-5+bob,1.4,5); } // STRONG holds a little Bible
+  ctx.restore(); }
+function drawRiders(){ var sx=SX(truck.x), sy=truck.y, f=truck.face||1; ctx.save(); ctx.translate(sx,sy); drawRider(-20*f,-40,'light',light.state==='hug',f); drawRider(20*f,-34,'strong',strong.state==='deliver',f); ctx.restore(); }
 function drawPlayer(b){ var sx=SX(b.x), sy=b.y; var col=ROLECOL[b.role]; var walking=b.state==='walk'; var bob=Math.sin(b.anim*3)*(walking?2.2:0.8); ctx.save(); ctx.translate(sx,sy); ctx.scale(1.32,1.32);
   ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(0,2,13,5,0,0,TAU); ctx.fill(); ctx.scale(b.facing||1,1); var strain=b.holding?3:0;
   ctx.fillStyle='#394251'; var lp=Math.sin(b.anim*6)*(walking?4:0); fillrr(-7,-11,6,13+lp,3); fillrr(2,-11,6,13-lp,3);
